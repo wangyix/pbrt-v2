@@ -65,10 +65,23 @@ private:
 
     // BVHAccel Private Data
     uint32_t maxPrimsInNode;
-    enum SplitMethod { SPLIT_MIDDLE, SPLIT_EQUAL_COUNTS, SPLIT_SAH };
+    enum SplitMethod { SPLIT_MIDDLE, SPLIT_EQUAL_COUNTS, SPLIT_SAH, SPLIT_AAC };
     SplitMethod splitMethod;
     vector<Reference<Primitive> > primitives;
     LinearBVHNode *nodes;
+
+
+    // AAC
+
+    // Top-level call to build AAC tree (algorithm 2)
+    BVHBuildNode *AacBuild(MemoryArena &buildArena,
+        vector<BVHPrimitiveInfo> &buildData, uint32_t *totalNodes,
+        vector<Reference<Primitive> > &orderedPrims);
+
+    // Recursive call to build subtree of AAC tree (algorithm 3)
+    BVHBuildNode *recursiveAacBuild(MemoryArena &buildArena,
+        vector<BVHPrimitiveInfo> &buildData, uint32_t start, uint32_t end,
+        uint32_t *totalNodes);
 };
 
 
