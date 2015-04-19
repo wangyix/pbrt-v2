@@ -39,11 +39,16 @@
 // accelerators/bvh.h*
 #include "pbrt.h"
 #include "primitive.h"
+
+#include <unordered_set>
+
 struct BVHBuildNode;
 
 // BVHAccel Forward Declarations
 struct BVHPrimitiveInfo;
 struct LinearBVHNode;
+
+struct BVHPrimitiveInfoAac;
 
 // BVHAccel Declarations
 class BVHAccel : public Aggregate {
@@ -74,14 +79,17 @@ private:
     // AAC
 
     // Top-level call to build AAC tree (algorithm 2)
-    BVHBuildNode *AacBuild(MemoryArena &buildArena,
+    BVHBuildNode *aacBuild(MemoryArena &buildArena,
         vector<BVHPrimitiveInfo> &buildData, uint32_t *totalNodes,
         vector<Reference<Primitive> > &orderedPrims);
 
     // Recursive call to build subtree of AAC tree (algorithm 3)
-    BVHBuildNode *recursiveAacBuild(MemoryArena &buildArena,
-        vector<BVHPrimitiveInfo> &buildData, uint32_t start, uint32_t end,
-        uint32_t *totalNodes);
+    std::unordered_set<BVHBuildNode*> recursiveAacBuild(
+        MemoryArena &buildArena, vector<BVHPrimitiveInfoAac> &buildDataAac,
+        uint32_t start, uint32_t end, int mortonSplitBit,
+        uint32_t *totalNodes, vector<Reference<Primitive> > &orderedPrims);
+
+    void combineClusters(std::unordered_set<BVHBuildNode*> &clusters, uint32_t maxClusters);
 };
 
 

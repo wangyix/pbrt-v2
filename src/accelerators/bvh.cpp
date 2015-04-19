@@ -188,7 +188,7 @@ BVHAccel::BVHAccel(const vector<Reference<Primitive> > &p,
     
     BVHBuildNode *root;
     if (splitMethod == SPLIT_AAC) {
-        root = AacBuild(buildArena, buildData, &totalNodes, orderedPrims);
+        root = aacBuild(buildArena, buildData, &totalNodes, orderedPrims);
     } else {
         root = recursiveBuild(buildArena, buildData, 0,
             primitives.size(), &totalNodes,
@@ -381,32 +381,61 @@ BVHBuildNode *BVHAccel::recursiveBuild(MemoryArena &buildArena,
     return node;
 }
 
+
+// AAC algorithm parameters
+#define AAC_DELTA 4
+#define AAC_EPSILON 0.2f
+
+inline uint32_t maxClustersFunction(uint32_t x) {
+    float c = 0.5f * pow(AAC_DELTA, 0.5f + AAC_EPSILON);
+    float alpha = 0.5f - AAC_EPSILON;
+    return Round2Int(c * pow(x, alpha));
+}
+
+
+struct BVHPrimitiveInfoAac {
+    BVHPrimitiveInfoAac() { }
+    void init(BVHPrimitiveInfo &primitiveInfo, uint32_t morton) {
+        primitiveNumber = primitiveInfo.primitiveNumber;
+        centroid = primitiveInfo.centroid;
+        bounds = primitiveInfo.bounds;
+        mortonCode = morton;
+    }
+    int primitiveNumber;
+    Point centroid;
+    BBox bounds;
+    uint32_t mortonCode;
+};
+
 struct PrimitiveMorton {
     int primitiveNumber;
     uint32_t mortonCode;
 };
 
+// MSD radix sort based on
+// http://rosettacode.org/wiki/Sorting_algorithms/Radix_sort#C.2B.2B
 class MortonBitTest {
     const int bit;
 public:
     MortonBitTest(int bit) : bit(bit) {}
-    bool operator()(PrimitiveMorton& p) {
-        return (p.mortonCode & (1 << bit)) == 0;
+    bool operator()(PrimitiveMorton& p) {       // passed to std::partition
+        return !(p.mortonCode & (1 << bit));
+    }
+    bool operator()(BVHPrimitiveInfoAac& p) {   // passed to std::find_if
+        return (p.mortonCode & (1 << bit));
     }
 };
-
-void msd_radix_sort(vector<PrimitiveMorton>::iterator start,
-    vector<PrimitiveMorton>::iterator end, int msb = 29) {
+void msd_radix_sort(PrimitiveMorton *start, PrimitiveMorton *end, int msb = 29) {
     
     if (start != end && msb >= 0) {
-        vector<PrimitiveMorton>::iterator mid = std::partition(start, end, MortonBitTest(msb));
+        PrimitiveMorton *mid = std::partition(start, end, MortonBitTest(msb));
         msb--;
         msd_radix_sort(start, mid, msb);
         msd_radix_sort(mid, end, msb);
     }
 }
 
-BVHBuildNode *BVHAccel::AacBuild(MemoryArena &buildArena, 
+BVHBuildNode *BVHAccel::aacBuild(MemoryArena &buildArena, 
     vector<BVHPrimitiveInfo> &buildData, uint32_t *totalNodes,
     vector<Reference<Primitive> > &orderedPrims) {
 
@@ -451,25 +480,97 @@ BVHBuildNode *BVHAccel::AacBuild(MemoryArena &buildArena,
         z = (z | (z << 4)) & 0x030C30C3;
         z = (z | (z << 2)) & 0x09249249;
 
-        mortonData[i].primitiveNumber = buildData[i].primitiveNumber;
-        mortonData[i].mortonCode = x | (y << 1) | (z << 2);
+        uint32_t mortonCode = x | (y << 1) | (z << 2);
+        assert((mortonCode & 0xC0000000) == 0);
 
-        assert((mortonData[i].mortonCode & 0xC0000000) == 0);
+        mortonData[i].primitiveNumber = buildData[i].primitiveNumber;
+        mortonData[i].mortonCode = mortonCode;
     }
 
     // radix sort primitives by morton code
-    msd_radix_sort(mortonData.begin(), mortonData.end());
+    msd_radix_sort(&mortonData.front(), &mortonData.back());
 
-    vector<BVHPrimitiveInfo> buildDataSorted(buildData.size());
+    /*vector<BVHPrimitiveInfo> buildDataSorted(buildData.size());
     for (uint32_t i = 0; i < buildData.size(); i++) {
         buildDataSorted[i] = buildData[mortonData[i].primitiveNumber];
     }
-    buildData.swap(buildDataSorted);
+    buildData.swap(buildDataSorted);*/
 
-
-    exit(1);
+    vector<BVHPrimitiveInfoAac> buildDataAac(buildData.size());
+    for (uint32_t i = 0; i < buildData.size(); i++) {
+        buildDataAac[i].init(buildData[mortonData[i].primitiveNumber],
+            mortonData[i].mortonCode);
+    }
     
     return NULL;
+}
+
+
+
+std::unordered_set<BVHBuildNode*> BVHAccel::recursiveAacBuild(
+    MemoryArena &buildArena, vector<BVHPrimitiveInfoAac> &buildDataAac,
+    uint32_t start, uint32_t end, int mortonSplitBit,
+    uint32_t *totalNodes, vector<Reference<Primitive> > &orderedPrims) {
+
+    uint32_t nPrimitives = end - start;
+    if (nPrimitives < AAC_DELTA) {
+        // intialize clusters with primitives (one cluster per primitive)
+        std::unordered_set<BVHBuildNode*> clusters;
+        for (uint32_t i = start; i < end; i++) {
+            BVHBuildNode *node = buildArena.Alloc<BVHBuildNode>();
+
+            // orderedPrims will be in Morton code sorted order.
+            // It doesn't matter how primitives are ordered in orderedPrims;
+            // each leaf in the final BVH will have only one primitive, so as
+            // long as the BVHBuildNode.primitiveNumber points to the index in
+            // orderedPrims that its primitve resides at, it will work.
+            uint32_t firstPrimOffset = orderedPrims.size();
+            orderedPrims.push_back(primitives[buildDataAac[i].primitiveNumber]);
+            node->InitLeaf(firstPrimOffset, 1, buildDataAac[i].bounds);
+            clusters.insert(node);
+        }
+        (*totalNodes) += nPrimitives;
+
+        combineClusters(clusters, maxClustersFunction(AAC_DELTA), totalNodes);
+        return clusters;
+    }
+
+    // split primitives into two partitions at current morton code bit position
+    // all primitives have same bit value at current position, move one bit right.
+    // if all bits have been exhausted, just split in half
+    uint32_t mid;
+    switch (mortonSplitBit >= 0) {
+    case true: {
+        do {
+            BVHPrimitiveInfoAac *pmid = std::find_if(&buildDataAac[start], &buildDataAac[end],
+                MortonBitTest(mortonSplitBit));
+            mid = pmid - &buildDataAac[0];
+            mortonSplitBit--;
+        } while ((mid == 0 || mid == end) && mortonSplitBit >= 0);
+        // if we exhaust all morton code bits, fall through to the bits-exhausted case
+        if (mortonSplitBit >= 0) {
+            break;
+        }
+    }
+    default: {
+        mid = (start + end) / 2;
+    }
+    }
+
+    // calculate clusters for left and right partions of primitives and find their union
+    std::unordered_set<BVHBuildNode*> clusters = recursiveAacBuild(buildArena, buildDataAac,
+        start, mid, mortonSplitBit, totalNodes, orderedPrims);
+    std::unordered_set<BVHBuildNode*> rightClusters = recursiveAacBuild(buildArena, buildDataAac,
+        mid, end, mortonSplitBit, totalNodes, orderedPrims);
+    clusters.insert(rightClusters.begin(), rightClusters.end());
+
+    combineClusters(clusters, maxClustersFunction(nPrimitives), totalNodes);
+    return clusters;
+}
+
+void BVHAccel::combineClusters(std::unordered_set<BVHBuildNode*> &clusters,
+    uint32_t maxClusters, uint32_t *totalNodes) {
+
 }
 
 
