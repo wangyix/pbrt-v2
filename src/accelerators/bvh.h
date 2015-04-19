@@ -89,7 +89,8 @@ private:
         uint32_t start, uint32_t end, int mortonSplitBit,
         uint32_t *totalNodes, vector<Reference<Primitive> > &orderedPrims);
 
-    void combineClusters(std::unordered_set<BVHBuildNode*> &clusters, uint32_t maxClusters);
+    void combineClusters(std::unordered_set<BVHBuildNode*> &clusters,
+        uint32_t maxClusters, uint32_t *totalNodes);
 };
 
 
