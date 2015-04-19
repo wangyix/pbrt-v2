@@ -158,6 +158,7 @@ BVHAccel::BVHAccel(const vector<Reference<Primitive> > &p,
     if (sm == "sah")         splitMethod = SPLIT_SAH;
     else if (sm == "middle") splitMethod = SPLIT_MIDDLE;
     else if (sm == "equal")  splitMethod = SPLIT_EQUAL_COUNTS;
+    else if (sm == "aac")    splitMethod = SPLIT_AAC;
     else {
         Warning("BVH split method \"%s\" unknown.  Using \"sah\".",
                 sm.c_str());
@@ -184,9 +185,16 @@ BVHAccel::BVHAccel(const vector<Reference<Primitive> > &p,
     uint32_t totalNodes = 0;
     vector<Reference<Primitive> > orderedPrims;
     orderedPrims.reserve(primitives.size());
-    BVHBuildNode *root = recursiveBuild(buildArena, buildData, 0,
-                                        primitives.size(), &totalNodes,
-                                        orderedPrims);
+    
+    BVHBuildNode *root;
+    if (splitMethod == SPLIT_AAC) {
+        root = AacBuild(buildArena, buildData, &totalNodes, orderedPrims);
+    } else {
+        root = recursiveBuild(buildArena, buildData, 0,
+            primitives.size(), &totalNodes,
+            orderedPrims);
+    }
+
     primitives.swap(orderedPrims);
         Info("BVH created with %d nodes for %d primitives (%.2f MB)", totalNodes,
              (int)primitives.size(), float(totalNodes * sizeof(LinearBVHNode))/(1024.f*1024.f));
@@ -372,6 +380,98 @@ BVHBuildNode *BVHAccel::recursiveBuild(MemoryArena &buildArena,
     }
     return node;
 }
+
+struct PrimitiveMorton {
+    int primitiveNumber;
+    uint32_t mortonCode;
+};
+
+class MortonBitTest {
+    const int bit;
+public:
+    MortonBitTest(int bit) : bit(bit) {}
+    bool operator()(PrimitiveMorton& p) {
+        return (p.mortonCode & (1 << bit)) == 0;
+    }
+};
+
+void msd_radix_sort(vector<PrimitiveMorton>::iterator start,
+    vector<PrimitiveMorton>::iterator end, int msb = 29) {
+    
+    if (start != end && msb >= 0) {
+        vector<PrimitiveMorton>::iterator mid = std::partition(start, end, MortonBitTest(msb));
+        msb--;
+        msd_radix_sort(start, mid, msb);
+        msd_radix_sort(mid, end, msb);
+    }
+}
+
+BVHBuildNode *BVHAccel::AacBuild(MemoryArena &buildArena, 
+    vector<BVHPrimitiveInfo> &buildData, uint32_t *totalNodes,
+    vector<Reference<Primitive> > &orderedPrims) {
+
+    // Find bbox of all primitive centroids
+    BBox centroidBounds(buildData[0].centroid);
+    for (uint32_t i = 1; i < buildData.size(); i++) {
+        centroidBounds = Union(centroidBounds, buildData[i].centroid);
+    }
+
+    vector<PrimitiveMorton> mortonData(buildData.size());
+    mortonData.begin();
+
+    Vector centroidRange = centroidBounds.pMax - centroidBounds.pMin;
+    for (uint32_t i = 0; i < buildData.size(); i++) {
+        // find quantized coordinates for the primitive centroid
+        Point &c = buildData[i].centroid;
+        int x = floor(1024.f * (c.x - centroidBounds.pMin.x) / centroidRange.x);
+        if (x == 1024) x = 1023;
+        int y = floor(1024.f * (c.y - centroidBounds.pMin.y) / centroidRange.y);
+        if (y == 1024) y = 1023;
+        int z = floor(1024.f * (c.z - centroidBounds.pMin.z) / centroidRange.z);
+        if (z == 1024) z = 1023;
+
+        assert(0 <= x && x < 1024);
+        assert(0 <= y && y < 1024);
+        assert(0 <= z && z < 1024);
+
+        // compute morton code from quantized coordinates. code from:
+        // http://stackoverflow.com/questions/1024754/how-to-compute-a-3d-morton-number-interleave-the-bits-of-3-ints
+        x = (x | (x << 16)) & 0x030000FF;
+        x = (x | (x << 8)) & 0x0300F00F;
+        x = (x | (x << 4)) & 0x030C30C3;
+        x = (x | (x << 2)) & 0x09249249;
+
+        y = (y | (y << 16)) & 0x030000FF;
+        y = (y | (y << 8)) & 0x0300F00F;
+        y = (y | (y << 4)) & 0x030C30C3;
+        y = (y | (y << 2)) & 0x09249249;
+
+        z = (z | (z << 16)) & 0x030000FF;
+        z = (z | (z << 8)) & 0x0300F00F;
+        z = (z | (z << 4)) & 0x030C30C3;
+        z = (z | (z << 2)) & 0x09249249;
+
+        mortonData[i].primitiveNumber = buildData[i].primitiveNumber;
+        mortonData[i].mortonCode = x | (y << 1) | (z << 2);
+
+        assert((mortonData[i].mortonCode & 0xC0000000) == 0);
+    }
+
+    // radix sort primitives by morton code
+    msd_radix_sort(mortonData.begin(), mortonData.end());
+
+    vector<BVHPrimitiveInfo> buildDataSorted(buildData.size());
+    for (uint32_t i = 0; i < buildData.size(); i++) {
+        buildDataSorted[i] = buildData[mortonData[i].primitiveNumber];
+    }
+    buildData.swap(buildDataSorted);
+
+
+    exit(1);
+    
+    return NULL;
+}
+
 
 
 uint32_t BVHAccel::flattenBVHTree(BVHBuildNode *node, uint32_t *offset) {
