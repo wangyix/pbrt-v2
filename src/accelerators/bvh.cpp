@@ -539,7 +539,7 @@ std::unordered_set<BVHBuildNode*> BVHAccel::recursiveAacBuild(
         }
         (*totalNodes) += nPrimitives;
 
-        combineClusters(clusters, maxClustersFunction(AAC_DELTA), totalNodes);
+        combineClusters(buildArena, clusters, maxClustersFunction(AAC_DELTA), totalNodes);
         return clusters;
     }
 
@@ -572,7 +572,7 @@ std::unordered_set<BVHBuildNode*> BVHAccel::recursiveAacBuild(
         mid, end, mortonSplitBit, totalNodes, orderedPrims);
     clusters.insert(rightClusters.begin(), rightClusters.end());
 
-    combineClusters(clusters, maxClustersFunction(nPrimitives), totalNodes);
+    combineClusters(buildArena, clusters, maxClustersFunction(nPrimitives), totalNodes);
     return clusters;
 }
 
