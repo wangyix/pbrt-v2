@@ -447,6 +447,9 @@ public:
     bool operator!=(const BBox &b) const {
         return b.pMin != pMin || b.pMax != pMax;
     }
+    Point Center() {
+        return (pMin + pMax) * 0.5f;
+    }
 
     // BBox Public Data
     Point pMin, pMax;
