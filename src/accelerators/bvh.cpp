@@ -608,8 +608,8 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
     std::unordered_map<BVHBuildNode*, std::pair<BVHBuildNode*, float>> closestMap;
     
     float bestDistance = INFINITY;
-    BVHBuildNode *left = NULL;
-    BVHBuildNode *right = NULL;
+    BVHBuildNode *c0 = NULL;
+    BVHBuildNode *c1 = NULL;
 
     // for each cluster, find the cluster that's closest to it and its distance away
     for (auto it = clusters.cbegin(); it != clusters.cend(); it++) {
@@ -623,8 +623,8 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
         // find the closest pair of clusters (will be first pair of clusters to combine)
         if (minDistance < bestDistance) {
             bestDistance = minDistance;
-            left = cluster;
-            right = closestCluster;
+            c0 = cluster;
+            c1 = closestCluster;
         }
     }
 
@@ -634,15 +634,23 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
         // combine pair of closest clusters
         (*totalNodes)++;
         BVHBuildNode *newCluster = buildArena.Alloc<BVHBuildNode>();
-        newCluster->InitInterior(0, left, right);   // splitAxis set to 0
+
+        Point c0Centroid = c0->bounds.Center();
+        Point c1Centroid = c1->bounds.Center();
+        BBox centroidBounds = Union(c0Centroid, c1Centroid);
+        int dim = centroidBounds.MaximumExtent();
+        if (c0Centroid[dim] <= c1Centroid[dim])
+            newCluster->InitInterior(dim, c0, c1);
+        else
+            newCluster->InitInterior(dim, c1, c0);
 
         // remove left, right clusters from list
-        assert(clusters.count(left) == 1);
-        assert(clusters.count(right) == 1);
-        clusters.erase(left);
-        clusters.erase(right);
-        closestMap.erase(left);
-        closestMap.erase(right);
+        assert(clusters.count(c0) == 1);
+        assert(clusters.count(c1) == 1);
+        clusters.erase(c0);
+        clusters.erase(c1);
+        closestMap.erase(c0);
+        closestMap.erase(c1);
         
         // find cluster closest to newly created cluster
         float minDistanceToNew;
@@ -653,13 +661,13 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
         // Update closestMap for clusters whose closest was one of the two clusters that go combined;
         // Find the new closest pair of clusters
         bestDistance = minDistanceToNew;
-        BVHBuildNode *nextLeft = newCluster;
-        BVHBuildNode *nextRight = closestClusterToNew;
+        BVHBuildNode *nextC0 = newCluster;
+        BVHBuildNode *nextC1 = closestClusterToNew;
         for (auto it = clusters.cbegin(); it != clusters.cend(); it++) {
             BVHBuildNode* cluster = *it;
             BVHBuildNode* closestCluster = closestMap[cluster].first;
             float minDistance;
-            if (closestCluster == left || closestCluster == right) {
+            if (closestCluster == c0 || closestCluster == c1) {
                 closestCluster = findClosestCluster(clusters, cluster, &minDistance);
                 closestMap[cluster].first = closestCluster;
                 closestMap[cluster].second = minDistance;
@@ -669,12 +677,12 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
 
             if (minDistance < bestDistance) {
                 bestDistance = minDistance;
-                nextLeft = cluster;
-                nextRight = closestCluster;
+                nextC0 = cluster;
+                nextC1 = closestCluster;
             }
         }
-        left = nextLeft;
-        right = nextRight;
+        c0 = nextC0;
+        c1 = nextC1;
 
         // insert new cluster into list
         clusters.insert(newCluster);
