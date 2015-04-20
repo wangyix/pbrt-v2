@@ -36,6 +36,8 @@
 #include "probes.h"
 #include "paramset.h"
 
+#include <unordered_map>
+
 // BVHAccel Local Declarations
 struct BVHPrimitiveInfo {
     BVHPrimitiveInfo() { }
@@ -382,6 +384,31 @@ BVHBuildNode *BVHAccel::recursiveBuild(MemoryArena &buildArena,
 }
 
 
+
+inline uint32_t mortonCode(uint32_t x, uint32_t y, uint32_t z) {
+    // compute morton code from quantized coordinates. code from:
+    // http://stackoverflow.com/questions/1024754/how-to-compute-a-3d-morton-number-interleave-the-bits-of-3-ints
+    x = (x | (x << 16)) & 0x030000FF;
+    x = (x | (x << 8)) & 0x0300F00F;
+    x = (x | (x << 4)) & 0x030C30C3;
+    x = (x | (x << 2)) & 0x09249249;
+
+    y = (y | (y << 16)) & 0x030000FF;
+    y = (y | (y << 8)) & 0x0300F00F;
+    y = (y | (y << 4)) & 0x030C30C3;
+    y = (y | (y << 2)) & 0x09249249;
+
+    z = (z | (z << 16)) & 0x030000FF;
+    z = (z | (z << 8)) & 0x0300F00F;
+    z = (z | (z << 4)) & 0x030C30C3;
+    z = (z | (z << 2)) & 0x09249249;
+
+    uint32_t mortonCode = x | (y << 1) | (z << 2);
+    assert((mortonCode & 0xC0000000) == 0);
+
+    return mortonCode;
+}
+
 // AAC algorithm parameters
 #define AAC_DELTA 4
 #define AAC_EPSILON 0.2f
@@ -450,6 +477,8 @@ BVHBuildNode *BVHAccel::aacBuild(MemoryArena &buildArena,
 
     Vector centroidRange = centroidBounds.pMax - centroidBounds.pMin;
     for (uint32_t i = 0; i < buildData.size(); i++) {
+        mortonData[i].primitiveNumber = buildData[i].primitiveNumber;
+
         // find quantized coordinates for the primitive centroid
         Point &c = buildData[i].centroid;
         int x = floor(1024.f * (c.x - centroidBounds.pMin.x) / centroidRange.x);
@@ -458,33 +487,12 @@ BVHBuildNode *BVHAccel::aacBuild(MemoryArena &buildArena,
         if (y == 1024) y = 1023;
         int z = floor(1024.f * (c.z - centroidBounds.pMin.z) / centroidRange.z);
         if (z == 1024) z = 1023;
-
         assert(0 <= x && x < 1024);
         assert(0 <= y && y < 1024);
         assert(0 <= z && z < 1024);
 
-        // compute morton code from quantized coordinates. code from:
-        // http://stackoverflow.com/questions/1024754/how-to-compute-a-3d-morton-number-interleave-the-bits-of-3-ints
-        x = (x | (x << 16)) & 0x030000FF;
-        x = (x | (x << 8)) & 0x0300F00F;
-        x = (x | (x << 4)) & 0x030C30C3;
-        x = (x | (x << 2)) & 0x09249249;
-
-        y = (y | (y << 16)) & 0x030000FF;
-        y = (y | (y << 8)) & 0x0300F00F;
-        y = (y | (y << 4)) & 0x030C30C3;
-        y = (y | (y << 2)) & 0x09249249;
-
-        z = (z | (z << 16)) & 0x030000FF;
-        z = (z | (z << 8)) & 0x0300F00F;
-        z = (z | (z << 4)) & 0x030C30C3;
-        z = (z | (z << 2)) & 0x09249249;
-
-        uint32_t mortonCode = x | (y << 1) | (z << 2);
-        assert((mortonCode & 0xC0000000) == 0);
-
-        mortonData[i].primitiveNumber = buildData[i].primitiveNumber;
-        mortonData[i].mortonCode = mortonCode;
+        // compute morton code from quantized coordinates
+        mortonData[i].mortonCode = mortonCode(x, y, z);;
     }
 
     // radix sort primitives by morton code
@@ -568,9 +576,100 @@ std::unordered_set<BVHBuildNode*> BVHAccel::recursiveAacBuild(
     return clusters;
 }
 
-void BVHAccel::combineClusters(std::unordered_set<BVHBuildNode*> &clusters,
+BVHBuildNode *findClosestCluster(const std::unordered_set<BVHBuildNode*> &clusters,
+    BVHBuildNode *target, float *closestDistance) {
+
+    float minDistance = INFINITY;
+    BVHBuildNode *minDistanceCluster = NULL;
+    for (auto it = clusters.cbegin(); it != clusters.cend(); it++) {
+        BVHBuildNode *cluster = *it;
+        if (cluster == target) continue;
+        BBox unionBox = Union(target->bounds, cluster->bounds);
+        float distance = unionBox.SurfaceArea();
+        if (distance < minDistance) {
+            minDistance = distance;
+            minDistanceCluster = cluster;
+        }
+    }
+    *closestDistance = minDistance;
+    return minDistanceCluster;
+}
+
+void BVHAccel::combineClusters(MemoryArena &buildArena,
+    std::unordered_set<BVHBuildNode*> &clusters,
     uint32_t maxClusters, uint32_t *totalNodes) {
 
+    std::unordered_map<BVHBuildNode*, std::pair<BVHBuildNode*, float>> closestMap;
+    
+    float bestDistance = INFINITY;
+    BVHBuildNode *left = NULL;
+    BVHBuildNode *right = NULL;
+
+    // for each cluster, find the cluster that's closest to it and its distance away
+    for (auto it = clusters.cbegin(); it != clusters.cend(); it++) {
+        BVHBuildNode *cluster = *it;
+        float minDistance;
+        BVHBuildNode* closestCluster = findClosestCluster(clusters, cluster, &minDistance);
+
+        closestMap[cluster].first = closestCluster;
+        closestMap[cluster].second = minDistance;
+
+        // find the closest pair of clusters (will be first pair of clusters to combine)
+        if (minDistance < bestDistance) {
+            bestDistance = minDistance;
+            left = cluster;
+            right = closestCluster;
+        }
+    }
+
+    for (uint32_t i = 0; i < clusters.size() - maxClusters; i++) {
+
+        // combine pair of closest clusters
+        (*totalNodes)++;
+        BVHBuildNode *newCluster = buildArena.Alloc<BVHBuildNode>();
+        newCluster->InitInterior(0, left, right);   // splitAxis set to 0
+
+        // remove left, right clusters from list
+        clusters.erase(left);
+        clusters.erase(right);
+        closestMap.erase(left);
+        closestMap.erase(right);
+        
+        // find cluster closest to newly created cluster
+        float minDistanceToNew;
+        BVHBuildNode* closestClusterToNew = findClosestCluster(clusters, newCluster, &minDistanceToNew);
+
+
+        // Iterate clusters list and simultaneously do the following:
+        // Update closestMap for clusters whose closest was one of the two clusters that go combined;
+        // Find the new closest pair of clusters
+        bestDistance = minDistanceToNew;
+        left = newCluster;
+        right = closestClusterToNew;
+        for (auto it = clusters.cbegin(); it != clusters.cend(); it++) {
+            BVHBuildNode* cluster = *it;
+            BVHBuildNode* closestCluster = closestMap[cluster].first;
+            float minDistance;
+            if (closestCluster == left || closestCluster == right) {
+                closestCluster = findClosestCluster(clusters, cluster, &minDistance);
+                closestMap[cluster].first = closestCluster;
+                closestMap[cluster].second = minDistance;
+            } else {
+                minDistance = closestMap[cluster].second;
+            }
+
+            if (minDistance < bestDistance) {
+                bestDistance = minDistance;
+                left = cluster;
+                right = closestCluster;
+            }
+        }
+
+        // insert new cluster into list
+        clusters.insert(newCluster);
+        closestMap[newCluster].first = closestClusterToNew;
+        closestMap[newCluster].second = minDistanceToNew;
+    }
 }
 
 
