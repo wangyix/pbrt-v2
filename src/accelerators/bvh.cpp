@@ -520,6 +520,8 @@ std::unordered_set<BVHBuildNode*> BVHAccel::recursiveAacBuild(
     uint32_t start, uint32_t end, int mortonSplitBit,
     uint32_t *totalNodes, vector<Reference<Primitive> > &orderedPrims) {
 
+    assert(end > start);
+
     uint32_t nPrimitives = end - start;
     if (nPrimitives < AAC_DELTA) {
         // intialize clusters with primitives (one cluster per primitive)
@@ -550,11 +552,11 @@ std::unordered_set<BVHBuildNode*> BVHAccel::recursiveAacBuild(
     switch (mortonSplitBit >= 0) {
     case true: {
         do {
-            BVHPrimitiveInfoAac *pmid = std::find_if(&buildDataAac[start], &buildDataAac[end],
+            BVHPrimitiveInfoAac *pmid = std::find_if(&buildDataAac[start], &buildDataAac[end-1]+1,
                 MortonBitTest(mortonSplitBit));
             mid = pmid - &buildDataAac[0];
             mortonSplitBit--;
-        } while ((mid == 0 || mid == end) && mortonSplitBit >= 0);
+        } while ((mid == start || mid == end) && mortonSplitBit >= 0);
         // if we exhaust all morton code bits, fall through to the bits-exhausted case
         if (mortonSplitBit >= 0) {
             break;
@@ -599,6 +601,10 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
     std::unordered_set<BVHBuildNode*> &clusters,
     uint32_t maxClusters, uint32_t *totalNodes) {
 
+    assert(maxClusters > 0);
+
+    if (clusters.size() <= maxClusters || clusters.size() < 2) return;
+
     std::unordered_map<BVHBuildNode*, std::pair<BVHBuildNode*, float>> closestMap;
     
     float bestDistance = INFINITY;
@@ -622,7 +628,8 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
         }
     }
 
-    for (uint32_t i = 0; i < clusters.size() - maxClusters; i++) {
+    int nCombinesNeeded = clusters.size() - maxClusters;
+    for (int i = 0; i < nCombinesNeeded; i++) {
 
         // combine pair of closest clusters
         (*totalNodes)++;
@@ -630,6 +637,8 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
         newCluster->InitInterior(0, left, right);   // splitAxis set to 0
 
         // remove left, right clusters from list
+        assert(clusters.count(left) == 1);
+        assert(clusters.count(right) == 1);
         clusters.erase(left);
         clusters.erase(right);
         closestMap.erase(left);
@@ -644,8 +653,8 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
         // Update closestMap for clusters whose closest was one of the two clusters that go combined;
         // Find the new closest pair of clusters
         bestDistance = minDistanceToNew;
-        left = newCluster;
-        right = closestClusterToNew;
+        BVHBuildNode *nextLeft = newCluster;
+        BVHBuildNode *nextRight = closestClusterToNew;
         for (auto it = clusters.cbegin(); it != clusters.cend(); it++) {
             BVHBuildNode* cluster = *it;
             BVHBuildNode* closestCluster = closestMap[cluster].first;
@@ -660,16 +669,20 @@ void BVHAccel::combineClusters(MemoryArena &buildArena,
 
             if (minDistance < bestDistance) {
                 bestDistance = minDistance;
-                left = cluster;
-                right = closestCluster;
+                nextLeft = cluster;
+                nextRight = closestCluster;
             }
         }
+        left = nextLeft;
+        right = nextRight;
 
         // insert new cluster into list
         clusters.insert(newCluster);
         closestMap[newCluster].first = closestClusterToNew;
         closestMap[newCluster].second = minDistanceToNew;
     }
+
+    assert(clusters.size() == maxClusters);
 }
 
 
