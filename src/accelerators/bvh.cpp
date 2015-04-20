@@ -498,19 +498,19 @@ BVHBuildNode *BVHAccel::aacBuild(MemoryArena &buildArena,
     // radix sort primitives by morton code
     msd_radix_sort(&mortonData.front(), &mortonData.back());
 
-    /*vector<BVHPrimitiveInfo> buildDataSorted(buildData.size());
-    for (uint32_t i = 0; i < buildData.size(); i++) {
-        buildDataSorted[i] = buildData[mortonData[i].primitiveNumber];
-    }
-    buildData.swap(buildDataSorted);*/
-
     vector<BVHPrimitiveInfoAac> buildDataAac(buildData.size());
     for (uint32_t i = 0; i < buildData.size(); i++) {
         buildDataAac[i].init(buildData[mortonData[i].primitiveNumber],
-            mortonData[i].mortonCode);
+                             mortonData[i].mortonCode);
     }
     
-    return NULL;
+    std::unordered_set<BVHBuildNode*> clusters = recursiveAacBuild(
+        buildArena, buildDataAac, 0, buildDataAac.size(), 29, totalNodes,
+        orderedPrims);
+
+    combineClusters(buildArena, clusters, 1, totalNodes);
+
+    return *(clusters.cbegin());
 }
 
 
