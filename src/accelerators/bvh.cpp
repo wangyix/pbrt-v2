@@ -428,6 +428,7 @@ struct BVHPrimitiveInfoAac {
         bounds = primitiveInfo.bounds;
         mortonCode = morton;
     }
+    bool operator<(uint32_t mortonCode) { return (this->mortonCode < mortonCode); }
     int primitiveNumber;
     Point centroid;
     BBox bounds;
@@ -435,32 +436,10 @@ struct BVHPrimitiveInfoAac {
 };
 
 struct PrimitiveMorton {
+    bool operator<(const PrimitiveMorton &b) { return (mortonCode < b.mortonCode); }
     int primitiveNumber;
     uint32_t mortonCode;
 };
-
-// MSD radix sort based on
-// http://rosettacode.org/wiki/Sorting_algorithms/Radix_sort#C.2B.2B
-class MortonBitTest {
-    const int bit;
-public:
-    MortonBitTest(int bit) : bit(bit) {}
-    bool operator()(PrimitiveMorton& p) {       // passed to std::partition
-        return !(p.mortonCode & (1 << bit));
-    }
-    bool operator()(BVHPrimitiveInfoAac& p) {   // passed to std::find_if
-        return (p.mortonCode & (1 << bit));
-    }
-};
-void msd_radix_sort(PrimitiveMorton *start, PrimitiveMorton *end, int msb = 29) {
-    
-    if (start != end && msb >= 0) {
-        PrimitiveMorton *mid = std::partition(start, end, MortonBitTest(msb));
-        msb--;
-        msd_radix_sort(start, mid, msb);
-        msd_radix_sort(mid, end, msb);
-    }
-}
 
 BVHBuildNode *BVHAccel::aacBuild(MemoryArena &buildArena, 
     vector<BVHPrimitiveInfo> &buildData, uint32_t *totalNodes,
@@ -492,11 +471,11 @@ BVHBuildNode *BVHAccel::aacBuild(MemoryArena &buildArena,
         assert(0 <= z && z < 1024);
 
         // compute morton code from quantized coordinates
-        mortonData[i].mortonCode = mortonCode(x, y, z);;
+        mortonData[i].mortonCode = mortonCode(x, y, z);
     }
 
     // radix sort primitives by morton code
-    msd_radix_sort(&mortonData.front(), &mortonData.back());
+    std::sort(&mortonData.front(), &mortonData.back());
 
     vector<BVHPrimitiveInfoAac> buildDataAac(buildData.size());
     for (uint32_t i = 0; i < buildData.size(); i++) {
@@ -552,8 +531,10 @@ std::unordered_set<BVHBuildNode*> BVHAccel::recursiveAacBuild(
     switch (mortonSplitBit >= 0) {
     case true: {
         do {
-            BVHPrimitiveInfoAac *pmid = std::find_if(&buildDataAac[start], &buildDataAac[end-1]+1,
-                MortonBitTest(mortonSplitBit));
+            // binary search for where the current morton bit position changes to 1 in sorted primitives
+            BVHPrimitiveInfoAac *pmid = std::lower_bound(&buildDataAac[start], &buildDataAac[end-1]+1,
+                1u << mortonSplitBit);
+
             mid = pmid - &buildDataAac[0];
             mortonSplitBit--;
         } while ((mid == start || mid == end) && mortonSplitBit >= 0);
