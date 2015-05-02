@@ -156,6 +156,10 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
   // use sample->lensU and sample->lensV to get a sample position on the lens
 
   // GenerateRay() should return the weight of the generated ray
+
+
+
+
   return 0.f;
 }
 

@@ -47,7 +47,9 @@ private:
    float ShutterClose;
    Film * film;
 
+   float filmZPosition;
    vector<LensSurface> lensSurfaces;    // ordered front to back
+
 };
 
 RealisticCamera *CreateRealisticCamera(const ParamSet &params,
