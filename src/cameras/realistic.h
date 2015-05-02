@@ -17,6 +17,15 @@ class AfZone {
 	  float top, bottom;
 	  int xres,yres;
 };
+
+class LensSurface {
+public:
+    float sphereRadius;     // 0 if is flat plane
+    float sphereCenter;     // plane Z intercept if flat plane
+    float refractiveRatio;  // n_front/n_back
+    float aperture;         // diameter of surface
+};
+
 class RealisticCamera : public Camera {
 public:
    RealisticCamera(const AnimatedTransform &cam2world,
@@ -37,6 +46,8 @@ private:
    float ShutterOpen;
    float ShutterClose;
    Film * film;
+
+   vector<LensSurface> lensSurfaces;    // ordered front to back
 };
 
 RealisticCamera *CreateRealisticCamera(const ParamSet &params,

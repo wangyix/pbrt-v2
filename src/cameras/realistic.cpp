@@ -58,6 +58,54 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
 	// YOUR CODE HERE -- build and store datastructures representing the given lens
 	// and film placement.
 
+    char line[512];
+
+    // parse lens file
+    ifstream ifs(specfile.c_str());
+    if (!ifs) {
+        fprintf(stderr, "Cannot open file %s\n", specfile.c_str());
+        exit(-1);
+    }
+
+    float lensZIntercept = 0.f;
+    float lastRefractiveIndex = 1.f;
+
+    while (!ifs.eof()) {
+        ifs.getline(line, 512);
+        if (line[0] != '\0' && line[0] != '#' &&
+            line[0] != ' ' && line[0] != '\t' && line[0] != '\n') {
+
+            float sphereRadius, lensZThickness, refractiveIndex, aperture;
+            sscanf(line, "%f %f %f %f\n", &sphereRadius, &lensZThickness,
+                &refractiveIndex, &aperture);
+
+            if (refractiveIndex == 0.f) refractiveIndex = 1.f;
+            
+            LensSurface lensSurface;
+            lensSurface.sphereRadius = sphereRadius;
+            lensSurface.refractiveRatio = lastRefractiveIndex / refractiveIndex;
+            lensSurface.aperture = aperture;
+            if (sphereRadius == 0.f) {
+                lensSurface.sphereCenter = lensZIntercept;
+            } else if (sphereRadius > 0.f) {
+                lensSurface.sphereCenter = lensZIntercept - sphereRadius;
+            } else {
+                lensSurface.sphereCenter = lensZIntercept + sphereRadius;
+            }
+            
+            lensSurfaces.push_back(lensSurface);
+
+            lensZIntercept -= lensZThickness;
+            lastRefractiveIndex = refractiveIndex;
+        }
+    }
+    ifs.close();
+
+    filmZPosition = lensZIntercept;
+
+
+
+
 	// If 'autofocusfile' is the empty string, then you should do
 	// nothing in any subsequent call to AutoFocus()
 	autofocus = false;
