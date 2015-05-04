@@ -52,8 +52,11 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
                                  : Camera(cam2world, sopen, sclose, f),
 								   ShutterOpen(sopen),
 								   ShutterClose(sclose),
-								   film(f)
+								   film(f),
+                                   filmDistance(filmdistance * 0.001f),
+                                   apertureDiameter(aperture_diameter_ * 0.001f)
 {
+
 
 	// YOUR CODE HERE -- build and store datastructures representing the given lens
 	// and film placement.
@@ -69,7 +72,7 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
 
     float lensZIntercept = 0.f;
     float lastRefractiveIndex = 1.f;
-
+        
     while (!ifs.eof()) {
         ifs.getline(line, 512);
         if (line[0] != '\0' && line[0] != '#' &&
@@ -79,18 +82,32 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
             sscanf(line, "%f %f %f %f\n", &sphereRadius, &lensZThickness,
                 &refractiveIndex, &aperture);
 
-            if (refractiveIndex == 0.f) refractiveIndex = 1.f;
+            sphereRadius *= 0.001f;
+            lensZThickness *= 0.001f;
+            aperture *= 0.001f;
+
+            if (sphereRadius == 0.f) {
+                // aperture stop
+                refractiveIndex = 1.f;
+                if (apertureDiameter > aperture) {
+                    Warning("Aperture diameter [%f] larger than max aperture [%f] in specfile.  Clamping to max.",
+                        apertureDiameter, aperture);
+                    apertureDiameter = aperture;
+                }
+            }
             
+
             LensSurface lensSurface;
             lensSurface.sphereRadius = sphereRadius;
-            lensSurface.refractiveRatio = lastRefractiveIndex / refractiveIndex;
+            lensSurface.zIntercept = lensZIntercept;
+            lensSurface.refractiveRatio = refractiveIndex / lastRefractiveIndex;
             lensSurface.aperture = aperture;
             if (sphereRadius == 0.f) {
-                lensSurface.sphereCenter = lensZIntercept;
+                lensSurface.sphereCenterZ = lensZIntercept;
             } else if (sphereRadius > 0.f) {
-                lensSurface.sphereCenter = lensZIntercept - sphereRadius;
+                lensSurface.sphereCenterZ = lensZIntercept - sphereRadius;
             } else {
-                lensSurface.sphereCenter = lensZIntercept + sphereRadius;
+                lensSurface.sphereCenterZ = lensZIntercept + sphereRadius;
             }
             
             lensSurfaces.push_back(lensSurface);
@@ -101,9 +118,23 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
     }
     ifs.close();
 
-    filmZPosition = lensZIntercept;
+    // compute area of rear lens disk
+    const LensSurface &rearLens = lensSurfaces.back();
 
+    // compute raster to camera transform
+    float filmZIntercept = rearLens.zIntercept - filmDistance;
+    float rasterDiag = sqrtf(film->xResolution*film->xResolution + 
+                             film->yResolution*film->yResolution);
+    float s = filmdiag / rasterDiag;
+    RasterToCamera = Scale(s, s, 1.f) * Translate(Vector(0.f, 0.f, filmZIntercept));
 
+    // compute rear lens disk
+    float rearLensZIntercept = rearLens.zIntercept;
+    float r = rearLens.aperture * 0.5f;
+    RearLensDiskToCamera = Scale(r, r, 1.f) * Translate(Vector(0.f, 0.f, rearLensZIntercept));
+
+    // compute area of rear lens disk
+    rearLensDiskArea = M_PI * r * r;
 
 
 	// If 'autofocusfile' is the empty string, then you should do
@@ -158,9 +189,72 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
   // GenerateRay() should return the weight of the generated ray
 
 
+    // compute raster point in camera space
+    Point Pras(sample.imageX, sample.imageY, 0);
+    Point Pras_c;
+    RasterToCamera(Pras, &Pras_c);
 
+    // compute point on rear lens disk in camera space
+    Point Pdisk(sample.lensU, sample.lensV, 0);
+    Point Pdisk_c;
+    RearLensDiskToCamera(Pdisk, &Pdisk_c);
 
-  return 0.f;
+    *ray = Ray(Pras_c, Normalize(Pdisk_c - Pras_c), 0.f, INFINITY);
+    float rayDirZ = ray->d.z;
+
+    // intersect ray with lens surfaces from rear to front
+    for (int i = lensSurfaces.size() - 1; i >= 0; i--) {
+
+        const LensSurface &lensSurface = lensSurfaces[i];
+        
+        float t;
+        float R = lensSurface.sphereRadius;
+        if (R == 0.f) {
+            // lens surface is planar; intersect with lens plane
+            if (ray->d.z == 0.f)
+                return 0.f;
+            t = (lensSurface.sphereCenterZ - ray->o.z) / ray->d.z;
+        } else {
+            // intersect with the sphere of the lens
+            Vector CO = ray->o - Point(0.f, 0.f, lensSurface.sphereCenterZ);
+            float b_half = Dot(CO, ray->d);
+            float c = CO.LengthSquared() - R * R;
+            float discr = b_half*b_half - c;
+            if (discr <= 0.f)
+                return 0.f;
+
+            float sqrt_discr = sqrtf(discr);
+            t = (-b_half > sqrt_discr) ? (-b_half - sqrt_discr) : (-b_half + sqrt_discr);
+        }
+        assert(t > 0.f);
+
+        Point intersect = (*ray)(t);
+
+        // check if intersection is within aperture of this lens surface
+        float distToZAxisSq = intersect.x*intersect.x + intersect.y*intersect.y;
+        float lensRadius = lensSurface.aperture * 0.5f;
+        if (distToZAxisSq > lensRadius*lensRadius)
+            return 0.f;
+
+        // calculate refracted ray
+        if (lensSurface.refractiveRatio == 1.f)
+            continue;   // ray passes through unaffected
+        Vector normal = (R == 0.f) ? Vector(0.f, 0.f, -1.f) :
+            Normalize(intersect - Point(0.f, 0.f, lensSurface.sphereCenterZ));
+        float mu = lensSurface.refractiveRatio;
+        float cos_theta_i = -Dot(ray->d, normal);
+        float cos_theta_t_sq = 1.f - mu*mu*(1.f - cos_theta_i*cos_theta_i);
+        if (cos_theta_t_sq < 0.f)
+            return 0.f; // total internal reflection
+        float gamma = mu * cos_theta_i - sqrtf(cos_theta_t_sq);
+
+        ray->d = mu * ray->d + gamma * normal;
+        ray->o = intersect;
+    }
+
+    // calculate weight of this ray
+    float rayDirZ2 = rayDirZ * rayDirZ;
+    return rayDirZ2 * rayDirZ2 / (rearLensDiskArea * filmDistance * filmDistance);
 }
 
 void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sample * origSample) {

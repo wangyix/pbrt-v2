@@ -20,9 +20,10 @@ class AfZone {
 
 class LensSurface {
 public:
+    float zIntercept;
     float sphereRadius;     // 0 if is flat plane
-    float sphereCenter;     // plane Z intercept if flat plane
-    float refractiveRatio;  // n_front/n_back
+    float sphereCenterZ;     // plane Z intercept if flat plane
+    float refractiveRatio;  // n_back/n_front
     float aperture;         // diameter of surface
 };
 
@@ -47,9 +48,14 @@ private:
    float ShutterClose;
    Film * film;
 
-   float filmZPosition;
-   vector<LensSurface> lensSurfaces;    // ordered front to back
 
+   float filmDistance;
+   float apertureDiameter;
+   vector<LensSurface> lensSurfaces;    // ordered front to back
+   float rearLensDiskArea;
+
+   Transform RasterToCamera;
+   Transform RearLensDiskToCamera; // transforms point in unit circle to point on rear lens disk
 };
 
 RealisticCamera *CreateRealisticCamera(const ParamSet &params,
