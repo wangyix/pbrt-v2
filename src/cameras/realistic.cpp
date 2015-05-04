@@ -98,17 +98,11 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
             
 
             LensSurface lensSurface;
-            lensSurface.sphereRadius = sphereRadius;
             lensSurface.zIntercept = lensZIntercept;
+            lensSurface.sphereRadius = abs(sphereRadius);
+            lensSurface.sphereCenterZ = lensZIntercept - sphereRadius;
             lensSurface.refractiveRatio = refractiveIndex / lastRefractiveIndex;
             lensSurface.aperture = aperture;
-            if (sphereRadius == 0.f) {
-                lensSurface.sphereCenterZ = lensZIntercept;
-            } else if (sphereRadius > 0.f) {
-                lensSurface.sphereCenterZ = lensZIntercept - sphereRadius;
-            } else {
-                lensSurface.sphereCenterZ = lensZIntercept + sphereRadius;
-            }
             
             lensSurfaces.push_back(lensSurface);
 
@@ -122,10 +116,10 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
     const LensSurface &rearLens = lensSurfaces.back();
 
     // compute raster to camera transform
-    float filmZIntercept = rearLens.zIntercept - filmDistance;
+    float filmZIntercept = rearLens.zIntercept - this->filmDistance;
     float rasterDiag = sqrtf(film->xResolution*film->xResolution + 
                              film->yResolution*film->yResolution);
-    float s = filmdiag / rasterDiag;
+    float s = filmdiag * 0.001f / rasterDiag;
     RasterToCamera = Scale(s, s, 1.f) * Translate(Vector(0.f, 0.f, filmZIntercept));
 
     // compute rear lens disk
@@ -195,6 +189,8 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
     RasterToCamera(Pras, &Pras_c);
 
     // compute point on rear lens disk in camera space
+    float lensU, lensV;
+    ConcentricSampleDisk(sample.lensU, sample.lensV, &lensU, &lensV);
     Point Pdisk(sample.lensU, sample.lensV, 0);
     Point Pdisk_c;
     RearLensDiskToCamera(Pdisk, &Pdisk_c);
@@ -207,16 +203,21 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
 
         const LensSurface &lensSurface = lensSurfaces[i];
         
-        float t;
+        Point intersect;
+        Vector normal;
         float R = lensSurface.sphereRadius;
         if (R == 0.f) {
             // lens surface is planar; intersect with lens plane
             if (ray->d.z == 0.f)
                 return 0.f;
-            t = (lensSurface.sphereCenterZ - ray->o.z) / ray->d.z;
+            float t = (lensSurface.sphereCenterZ - ray->o.z) / ray->d.z;
+            intersect = (*ray)(t);
+            normal = Vector(0.f, 0.f, -1.f);
+            assert(t > 0.f);
         } else {
             // intersect with the sphere of the lens
-            Vector CO = ray->o - Point(0.f, 0.f, lensSurface.sphereCenterZ);
+            Point C = Point(0.f, 0.f, lensSurface.sphereCenterZ);
+            Vector CO = ray->o - C;
             float b_half = Dot(CO, ray->d);
             float c = CO.LengthSquared() - R * R;
             float discr = b_half*b_half - c;
@@ -224,11 +225,18 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
                 return 0.f;
 
             float sqrt_discr = sqrtf(discr);
-            t = (-b_half > sqrt_discr) ? (-b_half - sqrt_discr) : (-b_half + sqrt_discr);
+            float t;
+            if (-b_half > sqrt_discr) {
+                t = -b_half - sqrt_discr;
+                intersect = (*ray)(t);
+                normal = Normalize(intersect - C);
+            } else {
+                t = -b_half + sqrt_discr;
+                intersect = (*ray)(t);
+                normal = Normalize(C - intersect);
+            }
+            assert(t > 0.f);
         }
-        assert(t > 0.f);
-
-        Point intersect = (*ray)(t);
 
         // check if intersection is within aperture of this lens surface
         float distToZAxisSq = intersect.x*intersect.x + intersect.y*intersect.y;
@@ -239,8 +247,6 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
         // calculate refracted ray
         if (lensSurface.refractiveRatio == 1.f)
             continue;   // ray passes through unaffected
-        Vector normal = (R == 0.f) ? Vector(0.f, 0.f, -1.f) :
-            Normalize(intersect - Point(0.f, 0.f, lensSurface.sphereCenterZ));
         float mu = lensSurface.refractiveRatio;
         float cos_theta_i = -Dot(ray->d, normal);
         float cos_theta_t_sq = 1.f - mu*mu*(1.f - cos_theta_i*cos_theta_i);
@@ -248,8 +254,10 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
             return 0.f; // total internal reflection
         float gamma = mu * cos_theta_i - sqrtf(cos_theta_t_sq);
 
-        ray->d = mu * ray->d + gamma * normal;
+        ray->d = Normalize(mu * ray->d + gamma * normal);
         ray->o = intersect;
+
+        assert(ray->d.z > 0.f);
     }
 
     // calculate weight of this ray
