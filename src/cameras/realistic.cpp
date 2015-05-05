@@ -43,12 +43,6 @@ RealisticCamera *CreateRealisticCamera(const ParamSet &params,
 	      specfile, autofocusfile, filmdiag, film);
 }
 
-
-ofstream ofile;
-//int recordNRays = 400;
-std::mutex ofileLock;
-
-
 RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
                                  float hither, float yon,
                                  float sopen, float sclose,
@@ -128,7 +122,7 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
     float rasterDiag = sqrtf(film->xResolution*film->xResolution + 
                              film->yResolution*film->yResolution);
     float s = filmdiag * 0.001f / rasterDiag;
-    RasterToCamera = Scale(s, s, 1.f) *
+    RasterToCamera = Scale(-s, s, 1.f) *
         Translate(Vector(-0.5f*film->xResolution, -0.5f*film->yResolution, filmZIntercept));
 
     // compute rear lens disk
@@ -148,11 +142,6 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
 		ParseAfZones(autofocusfile);
 		autofocus = true;
 	}
-
-
-
-
-    ofile.open("test.txt");
 }
 
 
@@ -183,7 +172,7 @@ void RealisticCamera::ParseAfZones(const string& filename)
 
 RealisticCamera::~RealisticCamera()
 {
-    ofile.close();
+
 }
 
 float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
@@ -196,17 +185,10 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
 
   // GenerateRay() should return the weight of the generated ray
 
-    bool record = ((float)rand() / (float)RAND_MAX < 0.002f);// && recordNRays > 0;
-    
-    vector<Point> path;
-
     // compute raster point in camera space
     Point Pras(sample.imageX, sample.imageY, 0);
     Point Pras_c;
     RasterToCamera(Pras, &Pras_c);
-    
-    //bool record = ((Pras_c - Point(0, 0, 0)).Length() < 0.01f);
-
 
     // compute point on rear lens disk in camera space
     float lensU, lensV;
@@ -218,14 +200,8 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
     *ray = Ray(Pras_c, Normalize(Pdisk_c - Pras_c), 0.f, INFINITY);
     float rayDirZ = ray->d.z;
 
-    if (record) {
-        ofileLock.lock();
-        path.push_back(ray->o);
-    }
-
     // intersect ray with lens surfaces from rear to front
-    int i;
-    for (i = lensSurfaces.size() - 1; i >= 0; i--) {
+    for (int i = lensSurfaces.size() - 1; i >= 0; i--) {
 
         const LensSurface &lensSurface = lensSurfaces[i];
         
@@ -235,7 +211,7 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
         if (R == 0.f) {
             // lens surface is planar; intersect with lens plane
             if (ray->d.z == 0.f)
-                break; //return 0.f;
+                return 0.f;
             float t = (lensSurface.sphereCenterZ - ray->o.z) / ray->d.z;
             intersect = (*ray)(t);
             normal = Vector(0.f, 0.f, -1.f);
@@ -248,11 +224,10 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
             float c = CO.LengthSquared() - R * R;
             float discr = b_half*b_half - c;
             if (discr <= 0.f)
-                break; //return 0.f;
+                return 0.f;
 
             float sqrt_discr = sqrtf(discr);
             float t;
-            //if (-b_half > sqrt_discr) {
             if (lensSurface.zIntercept < lensSurface.sphereCenterZ) {
                 t = -b_half - sqrt_discr;
                 intersect = (*ray)(t);
@@ -267,68 +242,32 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
 
         // check if intersection is within aperture of this lens surface
         float distToZAxisSq = intersect.x*intersect.x + intersect.y*intersect.y;
-float distToZAxis = sqrtf(distToZAxisSq);
         float lensRadius = lensSurface.aperture * 0.5f;
         if (distToZAxisSq > lensRadius*lensRadius)
-            break;// return 0.f;
+            return 0.f;
+
+        if (lensSurface.refractiveRatio == 1.f)
+            continue;   // ray passes through unaffected
 
         // calculate refracted ray
-        //if (lensSurface.refractiveRatio == 1.f)               // PUT THIS BACK IN LATER!!!!!!!!! $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$######
-            //continue;   // ray passes through unaffected
         float mu = lensSurface.refractiveRatio;
         float cos_theta_i = -Dot(ray->d, normal);
         float cos_theta_t_sq = 1.f - mu*mu*(1.f - cos_theta_i*cos_theta_i);
         if (cos_theta_t_sq < 0.f)
-            break;// return 0.f; // total internal reflection
+            return 0.f; // total internal reflection
         float gamma = mu * cos_theta_i - sqrtf(cos_theta_t_sq);
 
         ray->d = Normalize(mu * ray->d + gamma * normal);
         ray->o = intersect;
 
         assert(ray->d.z > 0.f);
-
-        if (record) {
-            path.push_back(ray->o);
-        }
     }
-
-    if (record) {
-        if (i < 0) {
-            Point out = (*ray)(0.005f);
-            path.push_back(out);
-        }
-                
-        if (i < 0) {
-
-            ofile << endl;
-            ofile << path.size() << endl;
-            for (Point& p : path) {
-                ofile << p.x << ' ' << p.y << ' ' << p.z << endl;
-            }
-
-            /*recordNRays--;
-            if (recordNRays == 0) {
-                printf("done\n");
-                //getchar();
-                //ofileLock.unlock();
-                //exit(0);
-            }*/
-
-        }
-
-        ofileLock.unlock();
-    }
-
-    if (i >= 0) {   // ugly hack to get path recording uGGGHGHGHHH
-        return 0.f;
-    }
-
 
     CameraToWorld(*ray, ray);
 
     // calculate weight of this ray
     float rayDirZ2 = rayDirZ * rayDirZ;
-    return 1.f;// rayDirZ2 * rayDirZ2 / (rearLensDiskArea * filmDistance * filmDistance);
+    return rayDirZ2 * rayDirZ2;// 1.f;//  / (rearLensDiskArea * filmDistance * filmDistance);
 }
 
 void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sample * origSample) {
