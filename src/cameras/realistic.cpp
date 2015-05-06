@@ -15,8 +15,6 @@
 #include <vector>
 #include <string>
 
-#include <mutex>
-
 using namespace std;
 
 RealisticCamera *CreateRealisticCamera(const ParamSet &params,
@@ -125,13 +123,25 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
     RasterToCamera = Scale(-s, s, 1.f) *
         Translate(Vector(-0.5f*film->xResolution, -0.5f*film->yResolution, filmZIntercept));
 
-    // compute rear lens disk
-    float rearLensZIntercept = rearLens.zIntercept;
-    float r = rearLens.aperture * 0.5f;
-    RearLensDiskToCamera = Scale(r, r, 1.f) * Translate(Vector(0.f, 0.f, rearLensZIntercept));
+    // compute rear lens disk (disk's edge coincides with edge of rear lens)
+    float diskRadius = 0.5f * rearLens.aperture;;
+    float diskZ;
+    if (rearLens.sphereRadius == 0.f) {
+        diskZ = rearLens.zIntercept;
+    } else {
+        float r = rearLens.sphereRadius;
+        float s = diskRadius;
+        assert(r >= s);
+        float diskZFromSphereCenter = sqrtf(r*r - s*s);
+        diskZ = (rearLens.zIntercept < rearLens.sphereCenterZ) ?
+              rearLens.sphereCenterZ - diskZFromSphereCenter
+            : rearLens.sphereCenterZ + diskZFromSphereCenter;
+    }
+    RearLensDiskToCamera = Scale(diskRadius, diskRadius, 1.f)
+                         * Translate(Vector(0.f, 0.f, diskZ));
 
     // compute area of rear lens disk
-    rearLensDiskArea = M_PI * r * r;
+    rearLensDiskArea = M_PI * diskRadius * diskRadius;
 
 
 	// If 'autofocusfile' is the empty string, then you should do
@@ -267,7 +277,7 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
 
     // calculate weight of this ray
     float rayDirZ2 = rayDirZ * rayDirZ;
-    return rayDirZ2 * rayDirZ2;// 1.f;//  / (rearLensDiskArea * filmDistance * filmDistance);
+    return rayDirZ2 * rayDirZ2 * rearLensDiskArea / (filmDistance * filmDistance);
 }
 
 void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sample * origSample) {
