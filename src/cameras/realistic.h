@@ -42,13 +42,17 @@ public:
    void  ParseAfZones(const string& filename);
 
 private:
+   void updateRasterToCameraTransform();
+   bool traceRayThruLensSurfaces(const Ray& in, Ray* out, bool frontToBack) const;
+   void getDiskOfLensSurface(const LensSurface& ls, float* diskZ, float* radius) const;
+
    bool  autofocus;
    vector<AfZone> afZones;
    float ShutterOpen;
    float ShutterClose;
    Film * film;
 
-
+   float filmDiag;
    float filmDistance;
    float apertureDiameter;
    vector<LensSurface> lensSurfaces;    // ordered front to back
