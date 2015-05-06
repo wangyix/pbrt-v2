@@ -43,6 +43,12 @@ RealisticCamera *CreateRealisticCamera(const ParamSet &params,
 }
 
 
+
+ofstream ofile;
+vector<Point> path;
+
+
+
 RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
                                  float hither, float yon,
                                  float sopen, float sclose,
@@ -136,6 +142,9 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
 		ParseAfZones(autofocusfile);
 		autofocus = true;
 	}
+
+
+    ofile.open("test.txt");
 }
 
 
@@ -164,9 +173,13 @@ void RealisticCamera::ParseAfZones(const string& filename)
 	printf("Read in %d AF zones from %s\n", afZones.size(), filename.c_str());
 }
 
+
+
+
+
 RealisticCamera::~RealisticCamera()
 {
-
+    ofile.close();
 }
 
 void RealisticCamera::updateRasterToCameraTransform() {
@@ -196,10 +209,13 @@ void RealisticCamera::getDiskOfLensSurface(const LensSurface& ls,
     }
 }
 
+
+
 bool RealisticCamera::traceRayThruLensSurfaces(const Ray& in, Ray* out,
                                 bool frontToBack) const {
     Ray ray = in;
 
+if (frontToBack) path.push_back(ray.o);
     // intersect ray with lens surfaces from rear to front
     for (int i = 0; i < lensSurfaces.size(); i++) {
 
@@ -263,6 +279,11 @@ bool RealisticCamera::traceRayThruLensSurfaces(const Ray& in, Ray* out,
 
         ray.d = Normalize(mu * ray.d + gamma * normal);
         ray.o = intersect;
+
+        if ((ray.d.z >= 0.f) == frontToBack)
+            return false;
+
+if (frontToBack) path.push_back(ray.o);
     }
     *out = ray;
     return true;
@@ -393,16 +414,12 @@ X = X * 1000.0f;
         // film plane.  Basically, we're trying to minimze the size of the 
         // circle of confusion of this scene point we've chosen (point X).
 
-        const int RAYS_REQUIRED = 50;
+        const int RAYS_REQUIRED = 400;
 
-        // ps stores the points on the film plane where rays from X have hit
-        // qs stores dp/dz, which is the rate of change of that hit point as
-        // the film plane moves along the z axis.
-        Point ps[RAYS_REQUIRED];
-        Vector qs[RAYS_REQUIRED];
-        Point pMean;
-        Vector qMean;
 
+        Ray rays[RAYS_REQUIRED];
+        Point oMean;
+        Vector dMean;
         int raysMadeItToFilm = 0;
         while (raysMadeItToFilm < RAYS_REQUIRED) {
 
@@ -417,28 +434,59 @@ X = X * 1000.0f;
             Ray Xray(diskPoint - 10.f * XrayDir, XrayDir, 0.f, INFINITY);
 
             // trace that ray through the lenses and record it if it hits the film plane
+path.clear();
             Ray ray;
             if (traceRayThruLensSurfaces(Xray, &ray, true)) {
+                rays[raysMadeItToFilm] = ray;
+                oMean += ray.o;
+                dMean += ray.d;
+                raysMadeItToFilm++;
+
+path.push_back(ray.o + 20.f * ray.d);
+ofile << endl << path.size() << endl;
+for (Point& p : path) {
+    ofile << p.x << ' ' << p.y << ' ' << p.z << endl;
+}
+            }
+        }
+        oMean /= raysMadeItToFilm;
+        dMean /= raysMadeItToFilm;
+
+
+
+        // ps stores the points on the film plane where rays from X have hit
+        // qs stores dp/dz, which is the rate of change of that hit point as
+        // the film plane moves along the z axis.
+        Point ps[RAYS_REQUIRED];
+        Vector qs[RAYS_REQUIRED];
+        Point pMean;
+        Vector qMean;
+        int convergentRays = 0;
+        for (int i = 0; i < raysMadeItToFilm; i++) {
+            Ray& ray = rays[i];
+            if (Dot(oMean - ray.o, ray.d - dMean) > 0.f) {  // convergent ray
                 // intersect ray with the film plane
                 assert(ray.d.z != 0.f);
                 float t = (filmZ - ray.o.z) / ray.d.z;
                 Point filmIntersect = ray(t);
                 Vector q = ray.d / ray.d.z;
-                ps[raysMadeItToFilm] = filmIntersect;
-                qs[raysMadeItToFilm] = q;
+                ps[convergentRays] = filmIntersect;
+                qs[convergentRays] = q;
                 pMean = pMean + filmIntersect;
                 qMean = qMean + q;
-                raysMadeItToFilm++;
+                convergentRays++;
             }
         }
-        pMean = pMean / raysMadeItToFilm;
-        qMean = qMean / raysMadeItToFilm;
+        pMean = pMean / convergentRays;
+        qMean = qMean / convergentRays;
+
+
 
         
         // compute optimal delta z by which to move the film plane
         float s1 = 0.f;
         float s2 = 0.f;
-        for (int i = 0; i < raysMadeItToFilm; i++) {
+        for (int i = 0; i < convergentRays; i++) {
             Vector pp = ps[i] - pMean;
             Vector qq = qs[i] - qMean;
             s1 += (pp.x*qq.x + pp.y*qq.y);
@@ -446,9 +494,11 @@ X = X * 1000.0f;
         }
         float deltaZ = -s1 / s2;
 
-        filmDistance -= deltaZ;
+        //filmDistance -= deltaZ;
         updateRasterToCameraTransform();
 
         delete[] samples;
+
+ofile.close();
 	}
 }
