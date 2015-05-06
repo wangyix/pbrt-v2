@@ -208,7 +208,7 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
     RearLensDiskToCamera(Pdisk, &Pdisk_c);
 
     *ray = Ray(Pras_c, Normalize(Pdisk_c - Pras_c), 0.f, INFINITY);
-    float rayDirZ = ray->d.z;
+    float filmRayDirZ = ray->d.z;
 
     // intersect ray with lens surfaces from rear to front
     for (int i = lensSurfaces.size() - 1; i >= 0; i--) {
@@ -274,10 +274,11 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
     }
 
     CameraToWorld(*ray, ray);
+    ray->d = Normalize(ray->d);
 
     // calculate weight of this ray
-    float rayDirZ2 = rayDirZ * rayDirZ;
-    return rayDirZ2 * rayDirZ2 * rearLensDiskArea / (filmDistance * filmDistance);
+    float filmRayDirZ2 = filmRayDirZ * filmRayDirZ;
+    return filmRayDirZ2 * filmRayDirZ2 * rearLensDiskArea / (filmDistance * filmDistance);
 }
 
 void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sample * origSample) {
