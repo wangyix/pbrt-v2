@@ -7,6 +7,7 @@
 #include "filters/box.h"
 #include "film/image.h"
 #include "samplers/stratified.h"
+#include "samplers/random.h"
 #include "intersection.h"
 #include "renderer.h"
 
@@ -293,103 +294,69 @@ void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sampl
 	if(!autofocus)
 		return;
 
-	for (size_t i=0; i<afZones.size(); i++) {
+	//for (size_t i=0; i<afZones.size(); i++) {
+    for (size_t i = 0; i<1; i++) {          // JUST DO THE FIRST ONE FOR NOW!!!!!!!!!!
 
 		AfZone & zone = afZones[i];
 
-		RNG rng;
-		MemoryArena arena;
-		Filter * filter = new BoxFilter(.5f,.5f);
-		const float crop[] = {zone.left,zone.right,zone.top,zone.bottom};
-		ImageFilm sensor(film->xResolution, film->yResolution, filter, crop,"foo.exr",false);
-		int xstart,xend,ystart,yend;
-		sensor.GetSampleExtent(&xstart,&xend,&ystart,&yend);
+        RNG rng;
 
-		StratifiedSampler sampler(xstart, xend, ystart, yend,
-		                          16, 16, true, ShutterOpen, ShutterClose);
+        // create sampler that generates 1 sample per pixel
+        int xstart = Ceil2Int(film->xResolution * zone.left);
+        int xend = Ceil2Int(film->xResolution * zone.right);
+        int ystart = Ceil2Int(film->yResolution * zone.top);
+        int yend = Ceil2Int(film->yResolution * zone.bottom);
+        RandomSampler sampler(xstart, xend, ystart, yend,
+            1, ShutterOpen, ShutterClose);
 
-		// Allocate space for samples and intersections
-		int maxSamples = sampler.MaximumSampleCount();
-		Sample *samples = origSample->Duplicate(maxSamples);
-		RayDifferential *rays = new RayDifferential[maxSamples];
-		Spectrum *Ls = new Spectrum[maxSamples];
-		Spectrum *Ts = new Spectrum[maxSamples];
-		Intersection *isects = new Intersection[maxSamples];
+        int maxSamples = sampler.MaximumSampleCount();
+        Sample *samples = origSample->Duplicate(maxSamples);
 
-		// Get samples from _Sampler_ and update image
-		int sampleCount;
-		while ((sampleCount = sampler.GetMoreSamples(samples, rng)) > 0) {
-			// Generate camera rays and compute radiance along rays
-			for (int i = 0; i < sampleCount; ++i) {
-				// Find camera ray for _sample[i]_
+        // find world to camera transform at... time 0 i guess
+        Transform CameraToWorld_t0;
+        CameraToWorld.Interpolate(0.f, &CameraToWorld_t0);
+        Transform WorldToCamera = Inverse(CameraToWorld_t0);
 
-				float rayWeight = this->GenerateRayDifferential(samples[i], &rays[i]);
-				rays[i].ScaleDifferentials(1.f / sqrtf(sampler.samplesPerPixel));
+        // generate a ray for each sample and record its intersection with the scene
+        // in camera-space coordinates as well as its distance from the camera
+        struct PointDistance {
+            Point p;
+            float d;
+            PointDistance(const Point& pp, float dd) : p(pp), d(dd) {}
+            bool operator<(const PointDistance& other) const {
+                return d < other.d;
+            }
+        };
+        
+        vector<PointDistance> isects;
+        int sampleCount;
+        while ((sampleCount = sampler.GetMoreSamples(samples, rng)) > 0) {
+            for (int i = 0; i < sampleCount; ++i) {
+                Ray ray;
+                this->GenerateRay(samples[i], &ray);
+                Intersection isect;
+                if (scene->Intersect(ray, &isect)) {
+                    Point p = WorldToCamera(isect.dg.p);
+                    isects.push_back(PointDistance(p, (p-Point(0,0,0)).Length()));
+                }
+            }
+        }
 
+        // find median intersection point (we'll call it X) based on distance
+        nth_element(isects.begin(), isects.begin() + isects.size() / 2, isects.end());
+        Point X = isects[isects.size() / 2].p;
+        
+        // We'll try to set the film distance so this point is in perfect focus.
+        // To do this, we'll shoot rays from this point to the camera lens and
+        // record all the rays that make it to the film plane.  We then solve
+        // for the optimal distance to move the film plane along the Z axis to
+        // minimize the variance of the intersection points of the rays and the
+        // film plane.  Basically, we're trying to minimze the size of the 
+        // circle of confusion of this scene point we've chosen (point X).
 
-				// Evaluate radiance along camera ray
+        vector<Point> ps;
+        vector<Vector> qs;
 
-				if (rayWeight > 0.f)
-					Ls[i] = rayWeight * renderer->Li(scene, rays[i], &samples[i], rng,
-													 arena, &isects[i], &Ts[i]);
-				else {
-					Ls[i] = 0.f;
-					Ts[i] = 1.f;
-				}
-
-				// Issue warning if unexpected radiance value returned
-				if (Ls[i].HasNaNs()) {
-					Error("Not-a-number radiance value returned "
-						  "for image sample.  Setting to black.");
-					Ls[i] = Spectrum(0.f);
-				}
-				else if (Ls[i].y() < -1e-5) {
-					Error("Negative luminance value, %f, returned"
-						  "for image sample.  Setting to black.", Ls[i].y());
-					Ls[i] = Spectrum(0.f);
-				}
-				else if (isinf(Ls[i].y())) {
-					Error("Infinite luminance value returned"
-						  "for image sample.  Setting to black.");
-					Ls[i] = Spectrum(0.f);
-				}
-
-			}
-
-			// Report sample results to _Sampler_, add contributions to image
-			if (sampler.ReportResults(samples, rays, Ls, isects, sampleCount))
-			{
-				for (int i = 0; i < sampleCount; ++i)
-				{
-
-					sensor.AddSample(samples[i], Ls[i]);
-
-				}
-			}
-
-			// Free _MemoryArena_ memory from computing image sample values
-			arena.FreeAll();
-		}
-
-		float * rgb;
-		int width;
-		int height;
-		sensor.WriteRGB(&rgb,&width,&height,1.f);
-		// YOUR CODE HERE! The rbg contents of the image for this zone
-		// are now stored in the array 'rgb'.  You can now do whatever
-		// processing you wish
-
-
-		//you own rgb  now so make sure to delete it:
-		delete [] rgb;
-		//if you want to see the output rendered from your sensor, uncomment this line (it will write a file called foo.exr)
-		//sensor.WriteImage(1.f);
-
-
-		delete[] samples;
-		delete[] rays;
-		delete[] Ls;
-		delete[] Ts;
-		delete[] isects;
+        delete[] samples;
 	}
 }
