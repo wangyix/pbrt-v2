@@ -474,6 +474,7 @@ void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sampl
         const float alpha = 0.5f * (3.f - sqrtf(5));
         float a = 0.5f * filmDistance;
         float b = 1.5f * filmDistance;
+        printf("\nfilmDistance search range: [%.2f, %.2f]\n", a, b);
         float x0;
         float x1;
         float f_x0;
@@ -481,7 +482,6 @@ void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sampl
         bool f_x0_unknown = true;
         bool f_x1_unknown = true;
         while (b - a >= EPSILON) {
-            printf("filmDistance search range: [%f, %f]\n", a, b);
             // calculate the f(x) that's not being reused from last iteration
             if (f_x0_unknown) {
                 x0 = a + alpha * (b - a);
@@ -513,9 +513,11 @@ void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sampl
                 f_x0_unknown = true;
                 f_x1_unknown = true;
             }
+            printf("filmDistance search range: [%.2f, %.2f]\n", a, b);
         }
 
         filmDistance = 0.5f * (a + b);
         updateRasterToCameraTransform();
+        printf("filmDistance set to %.2f\n\n", filmDistance);
     }
 }

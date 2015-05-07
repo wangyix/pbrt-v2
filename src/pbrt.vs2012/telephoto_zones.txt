@@ -1,0 +1,4 @@
+
+# AF Zone for telephoto
+
+.7 .76 .4 .46
