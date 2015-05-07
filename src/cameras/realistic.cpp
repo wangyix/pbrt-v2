@@ -42,13 +42,6 @@ RealisticCamera *CreateRealisticCamera(const ParamSet &params,
 	      specfile, autofocusfile, filmdiag, film);
 }
 
-
-
-ofstream ofile;
-vector<Point> path;
-
-
-
 RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
                                  float hither, float yon,
                                  float sopen, float sclose,
@@ -143,9 +136,6 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
 		ParseAfZones(autofocusfile);
 		autofocus = true;
 	}
-
-
-    ofile.open("test.txt");
 }
 
 
@@ -180,7 +170,7 @@ void RealisticCamera::ParseAfZones(const string& filename)
 
 RealisticCamera::~RealisticCamera()
 {
-    ofile.close();
+    
 }
 
 void RealisticCamera::updateRasterToCameraTransform() {
@@ -216,7 +206,6 @@ bool RealisticCamera::traceRayThruLensSurfaces(const Ray& in, Ray* out,
                                 bool frontToBack) const {
     Ray ray = in;
 
-if (frontToBack) path.push_back(ray.o);
     // intersect ray with lens surfaces from rear to front
     for (int i = 0; i < lensSurfaces.size(); i++) {
 
@@ -283,8 +272,6 @@ if (frontToBack) path.push_back(ray.o);
 
         if ((ray.d.z >= 0.f) == frontToBack)
             return false;
-
-if (frontToBack) path.push_back(ray.o);
     }
     *out = ray;
     return true;
@@ -317,12 +304,9 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
     if (!traceRayThruLensSurfaces(filmRay, ray, false))
         return 0.f;
     
-ray->o = ray->o / 1000.0f;
-
+    ray->o = ray->o * 0.001f;  // convert millimeters to meters
     CameraToWorld(*ray, ray);
     ray->d = Normalize(ray->d);
-
-
 
     // calculate weight of this ray
     float filmRayDirZ2 = filmRay.d.z * filmRay.d.z;
@@ -342,177 +326,101 @@ void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sampl
 	if(!autofocus)
 		return;
 
+    for (size_t i = 0; i<afZones.size(); i++) {
 
-    float filmZ = lensSurfaces.back().zIntercept - this->filmDistance;
-
-    // find world to camera transform at... time 0 i guess
-    Transform CameraToWorld_t0;
-    CameraToWorld.Interpolate(0.f, &CameraToWorld_t0);
-    Transform WorldToCamera = Inverse(CameraToWorld_t0);
-
-    // compute disk of front lens
-    float diskZ, diskRadius;
-    getDiskOfLensSurface(lensSurfaces.front(), &diskZ, &diskRadius);
-    Transform FrontLensDiskToCamera = Scale(diskRadius, diskRadius, 1.f)
-        * Translate(Vector(0.f, 0.f, diskZ));
-
-    
-    //for (size_t i=0; i<afZones.size(); i++) {
-    for (size_t n = 0; n<1; n++) {          // JUST DO THE FIRST ONE FOR NOW!!!!!!!!!!
-
-		AfZone & zone = afZones[n];
+        AfZone & zone = afZones[i];
 
         RNG rng;
+        MemoryArena arena;
+        Filter * filter = new BoxFilter(.5f, .5f);
+        const float crop[] = { zone.left, zone.right, zone.top, zone.bottom };
+        ImageFilm sensor(film->xResolution, film->yResolution, filter, crop, "foo.exr", false);
+        int xstart, xend, ystart, yend;
+        sensor.GetSampleExtent(&xstart, &xend, &ystart, &yend);
 
-        // create sampler that generates 1 sample per pixel
-        int xstart = Ceil2Int(film->xResolution * zone.left);
-        int xend = Ceil2Int(film->xResolution * zone.right);
-        int ystart = Ceil2Int(film->yResolution * zone.top);
-        int yend = Ceil2Int(film->yResolution * zone.bottom);
-        RandomSampler sampler(xstart, xend, ystart, yend,
-            16, ShutterOpen, ShutterClose);
+        StratifiedSampler sampler(xstart, xend, ystart, yend,
+            16, 16, true, ShutterOpen, ShutterClose);
 
+        // Allocate space for samples and intersections
         int maxSamples = sampler.MaximumSampleCount();
         Sample *samples = origSample->Duplicate(maxSamples);
+        RayDifferential *rays = new RayDifferential[maxSamples];
+        Spectrum *Ls = new Spectrum[maxSamples];
+        Spectrum *Ts = new Spectrum[maxSamples];
+        Intersection *isects = new Intersection[maxSamples];
 
-
-        // generate a ray for each sample and record its intersection with the scene
-        // in camera-space coordinates as well as its distance from the camera
-        struct PointDistance {
-            Point p;
-            float d;
-            PointDistance(const Point& pp, float dd) : p(pp), d(dd) {}
-            bool operator<(const PointDistance& other) const {
-                return d < other.d;
-            }
-        };
-        
-        vector<PointDistance> isects;
+        // Get samples from _Sampler_ and update image
         int sampleCount;
         while ((sampleCount = sampler.GetMoreSamples(samples, rng)) > 0) {
+            // Generate camera rays and compute radiance along rays
             for (int i = 0; i < sampleCount; ++i) {
-                Ray ray;
-                if (this->GenerateRay(samples[i], &ray) > 0.f) {
-                    Intersection isect;
-                    if (scene->Intersect(ray, &isect)) {
-                        Point p = WorldToCamera(isect.dg.p);
-                        isects.push_back(PointDistance(p, (p - Point(0, 0, 0)).Length()));
-                    }
+                // Find camera ray for _sample[i]_
+
+                float rayWeight = this->GenerateRayDifferential(samples[i], &rays[i]);
+                rays[i].ScaleDifferentials(1.f / sqrtf(sampler.samplesPerPixel));
+
+
+                // Evaluate radiance along camera ray
+
+                if (rayWeight > 0.f)
+                    Ls[i] = rayWeight * renderer->Li(scene, rays[i], &samples[i], rng,
+                    arena, &isects[i], &Ts[i]);
+                else {
+                    Ls[i] = 0.f;
+                    Ts[i] = 1.f;
+                }
+
+                // Issue warning if unexpected radiance value returned
+                if (Ls[i].HasNaNs()) {
+                    Error("Not-a-number radiance value returned "
+                        "for image sample.  Setting to black.");
+                    Ls[i] = Spectrum(0.f);
+                } else if (Ls[i].y() < -1e-5) {
+                    Error("Negative luminance value, %f, returned"
+                        "for image sample.  Setting to black.", Ls[i].y());
+                    Ls[i] = Spectrum(0.f);
+                } else if (isinf(Ls[i].y())) {
+                    Error("Infinite luminance value returned"
+                        "for image sample.  Setting to black.");
+                    Ls[i] = Spectrum(0.f);
+                }
+
+            }
+
+            // Report sample results to _Sampler_, add contributions to image
+            if (sampler.ReportResults(samples, rays, Ls, isects, sampleCount))
+            {
+                for (int i = 0; i < sampleCount; ++i)
+                {
+
+                    sensor.AddSample(samples[i], Ls[i]);
+
                 }
             }
+
+            // Free _MemoryArena_ memory from computing image sample values
+            arena.FreeAll();
         }
 
-        // find median intersection point (we'll call it X) based on distance
-        nth_element(isects.begin(), isects.begin() + isects.size() / 2, isects.end());
-        Point X = isects[isects.size() / 2].p;
-
-        //Point X(0.f, 0.f, isects[isects.size() / 2].p.z);
-
-        X = X * 1000.0f;
-        
-        // We'll try to set the film distance so this point is in perfect focus.
-        // To do this, we'll shoot rays from this point to the camera lens and
-        // record all the rays that make it to the film plane.  We then solve
-        // for the optimal distance to move the film plane along the Z axis to
-        // minimize the variance of the intersection points of the rays and the
-        // film plane.  Basically, we're trying to minimze the size of the 
-        // circle of confusion of this scene point we've chosen (point X).
-
-        const int RAYS_REQUIRED = 400;
-
-vector<vector<Point>> paths;
-        Ray rays[RAYS_REQUIRED];
-        Point oMean;
-        Vector dMean;
-        int raysMadeItToFilm = 0;
-        while (raysMadeItToFilm < RAYS_REQUIRED) {
-
-            // create a ray from X to a random point on the disk of the front lens
-            float u = rng.RandomFloat();
-            float v = rng.RandomFloat();
-            float lensU, lensV;
-            ConcentricSampleDisk(u, v, &lensU, &lensV);
-// project lensU, lensV to some fixed radius
-//float lensR = sqrtf(lensU*lensU + lensV*lensV);
-//lensU *= (0.4f / lensR);
-//lensV *= (0.4f / lensR);
-            Point diskPoint = FrontLensDiskToCamera(Point(lensU, lensV, 0.f));
-            //Ray Xray(X, Normalize(diskPoint - X), 0.f, INFINITY);
-            Vector XrayDir = Normalize(diskPoint - X); //Vector(0, 0, -1);
-            Ray Xray(diskPoint - 10.f * XrayDir, XrayDir, 0.f, INFINITY);
-
-            // trace that ray through the lenses and record it if it hits the film plane
-
-path.clear();
-            Ray ray;
-            if (traceRayThruLensSurfaces(Xray, &ray, true)) {
-                rays[raysMadeItToFilm] = ray;
-                oMean += ray.o;
-                dMean += ray.d;
-                raysMadeItToFilm++;
+        float * rgb;
+        int width;
+        int height;
+        sensor.WriteRGB(&rgb, &width, &height, 1.f);
+        // YOUR CODE HERE! The rbg contents of the image for this zone
+        // are now stored in the array 'rgb'.  You can now do whatever
+        // processing you wish
 
 
-paths.push_back(path);
-            }
-        }
-        oMean /= raysMadeItToFilm;
-        dMean /= raysMadeItToFilm;
+        //you own rgb  now so make sure to delete it:
+        delete[] rgb;
+        //if you want to see the output rendered from your sensor, uncomment this line (it will write a file called foo.exr)
+        //sensor.WriteImage(1.f);
 
-
-
-        // ps stores the points on the film plane where rays from X have hit
-        // qs stores dp/dz, which is the rate of change of that hit point as
-        // the film plane moves along the z axis.
-        Point ps[RAYS_REQUIRED];
-        Vector qs[RAYS_REQUIRED];
-        Point pMean;
-        Vector qMean;
-        int convergentRays = 0;
-        for (int i = 0; i < raysMadeItToFilm; i++) {
-            Ray& ray = rays[i];
-            //if (Dot(oMean - ray.o, ray.d - dMean) > 0.f) {  // convergent ray
-                // intersect ray with the film plane
-                assert(ray.d.z != 0.f);
-                float t = (filmZ - ray.o.z) / ray.d.z;
-                Point filmIntersect = ray(t);
-                Vector q = ray.d / ray.d.z;
-                ps[convergentRays] = filmIntersect;
-                qs[convergentRays] = q;
-                pMean = pMean + filmIntersect;
-                qMean = qMean + q;
-                convergentRays++;
-
-paths[i].push_back(filmIntersect);
-paths[i].push_back(filmIntersect + 1.f*filmDistance * ray.d);
-ofile << endl << paths[i].size() << endl;
-for (Point& p : paths[i]) {
-    ofile << p.x << ' ' << p.y << ' ' << p.z << endl;
-}
-            //}
-        }
-        pMean = pMean / convergentRays;
-        qMean = qMean / convergentRays;
-
-
-
-        
-        // compute optimal delta z by which to move the film plane
-        float s1 = 0.f;
-        float s2 = 0.f;
-        for (int i = 0; i < convergentRays; i++) {
-            Vector pp = ps[i] - pMean;
-            Vector qq = qs[i] - qMean;
-            s1 += (pp.x*qq.x + pp.y*qq.y);
-            s2 += (qq.x*qq.x + qq.y*qq.y);
-        }
-        float deltaZ = -s1 / s2;
-
-        filmDistance -= deltaZ;
-        updateRasterToCameraTransform();
 
         delete[] samples;
-
-ofile.close();
-//exit(1);
-	}
+        delete[] rays;
+        delete[] Ls;
+        delete[] Ts;
+        delete[] isects;
+    }
 }
