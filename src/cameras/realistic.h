@@ -46,6 +46,12 @@ private:
    bool traceRayThruLensSurfaces(const Ray& in, Ray* out, bool frontToBack) const;
    void getDiskOfLensSurface(const LensSurface& ls, float* diskZ, float* radius) const;
 
+   void renderAfZone(Renderer* renderer, const Scene* scene, Sample* origSample,
+       AfZone& zone, float** rgb, int* width, int* height);
+
+   float MLofAfZone(Renderer* renderer, const Scene* scene, Sample* origSample,
+       AfZone& zone, float filmDist);
+
    bool  autofocus;
    vector<AfZone> afZones;
    float ShutterOpen;

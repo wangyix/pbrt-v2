@@ -314,6 +314,140 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
     return filmRayDirZ2 * filmRayDirZ2 * rearLensDiskArea / (filmToDiskDistance * filmToDiskDistance);
 }
 
+
+void RealisticCamera::renderAfZone(Renderer* renderer, const Scene* scene, Sample* origSample,
+                    AfZone& zone, float** rgb, int* width, int* height) {
+    RNG rng;
+    MemoryArena arena;
+    Filter * filter = new BoxFilter(.5f, .5f);
+    const float crop[] = { zone.left, zone.right, zone.top, zone.bottom };
+    ImageFilm sensor(film->xResolution, film->yResolution, filter, crop, "foo.exr", false);
+    int xstart, xend, ystart, yend;
+    sensor.GetSampleExtent(&xstart, &xend, &ystart, &yend);
+
+    StratifiedSampler sampler(xstart, xend, ystart, yend,
+        32, 32, true, ShutterOpen, ShutterClose);
+
+    // Allocate space for samples and intersections
+    int maxSamples = sampler.MaximumSampleCount();
+    Sample *samples = origSample->Duplicate(maxSamples);
+    RayDifferential *rays = new RayDifferential[maxSamples];
+    Spectrum *Ls = new Spectrum[maxSamples];
+    Spectrum *Ts = new Spectrum[maxSamples];
+    Intersection *isects = new Intersection[maxSamples];
+
+    // Get samples from _Sampler_ and update image
+    int sampleCount;
+    while ((sampleCount = sampler.GetMoreSamples(samples, rng)) > 0) {
+        // Generate camera rays and compute radiance along rays
+        for (int i = 0; i < sampleCount; ++i) {
+            // Find camera ray for _sample[i]_
+
+            float rayWeight = this->GenerateRayDifferential(samples[i], &rays[i]);
+            rays[i].ScaleDifferentials(1.f / sqrtf(sampler.samplesPerPixel));
+
+
+            // Evaluate radiance along camera ray
+
+            if (rayWeight > 0.f)
+                Ls[i] = rayWeight * renderer->Li(scene, rays[i], &samples[i], rng,
+                arena, &isects[i], &Ts[i]);
+            else {
+                Ls[i] = 0.f;
+                Ts[i] = 1.f;
+            }
+
+            // Issue warning if unexpected radiance value returned
+            if (Ls[i].HasNaNs()) {
+                Error("Not-a-number radiance value returned "
+                    "for image sample.  Setting to black.");
+                Ls[i] = Spectrum(0.f);
+            } else if (Ls[i].y() < -1e-5) {
+                Error("Negative luminance value, %f, returned"
+                    "for image sample.  Setting to black.", Ls[i].y());
+                Ls[i] = Spectrum(0.f);
+            } else if (isinf(Ls[i].y())) {
+                Error("Infinite luminance value returned"
+                    "for image sample.  Setting to black.");
+                Ls[i] = Spectrum(0.f);
+            }
+
+        }
+
+        // Report sample results to _Sampler_, add contributions to image
+        if (sampler.ReportResults(samples, rays, Ls, isects, sampleCount))
+        {
+            for (int i = 0; i < sampleCount; ++i)
+            {
+
+                sensor.AddSample(samples[i], Ls[i]);
+
+            }
+        }
+
+        // Free _MemoryArena_ memory from computing image sample values
+        arena.FreeAll();
+    }
+
+    sensor.WriteRGB(rgb, width, height, 1.f);
+
+
+    //if you want to see the output rendered from your sensor, uncomment this line (it will write a file called foo.exr)
+    //sensor.WriteImage(1.f);
+
+
+    delete[] samples;
+    delete[] rays;
+    delete[] Ls;
+    delete[] Ts;
+    delete[] isects;
+}
+
+
+float RealisticCamera::MLofAfZone(Renderer* renderer, const Scene* scene,
+    Sample* origSample, AfZone& zone, float filmDist) {
+
+    // render the portion of the image inside the af zone using the
+    // specfied film distance
+    float temp = filmDistance;
+    filmDistance = filmDist;
+    updateRasterToCameraTransform();
+    float* rgb;
+    int width, height;
+    renderAfZone(renderer, scene, origSample, zone, &rgb, &width, &height);
+    filmDistance = temp;
+    updateRasterToCameraTransform();
+
+    // convert image to luminance
+    float* I = new float[width*height];
+    for (int i = 0; i < width*height; i++) {
+        I[i] = 0.299f * rgb[3 * i] + 0.587f * rgb[3 * i + 1] + 0.114f * rgb[3 * i + 2];
+    }
+
+    // compute focus measure (ML for border pixels not calculated)
+    const float ML_threshold = 0.05f;
+    float F = 0.f;
+    for (int y = 1; y < height - 1; y++) {
+        for (int x = 1; x < width - 1; x++) {
+            int center = y*width + x;
+            int left = center - 1;
+            int right = center + 1;
+            int top = center - width;
+            int bottom = center + width;
+            float ML = abs(2.f*I[center] - I[left] - I[right])
+                + abs(2.f*I[center] - I[top] - I[bottom]);
+            if (ML > ML_threshold)
+                F += ML;
+        }
+    }
+
+    delete[] I;
+    delete[] rgb;
+
+    return F;
+}
+
+
 void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sample * origSample) {
 	// YOUR CODE HERE:
 	// The current code shows how to create a new Sampler, and Film cropped to the size of the auto focus zone.
@@ -326,101 +460,62 @@ void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sampl
 	if(!autofocus)
 		return;
 
-    for (size_t i = 0; i<afZones.size(); i++) {
+    
+    //for (size_t i = 0; i<afZones.size(); i++) {
+    for (size_t n = 0; n<1; n++) {
 
-        AfZone & zone = afZones[i];
-
-        RNG rng;
-        MemoryArena arena;
-        Filter * filter = new BoxFilter(.5f, .5f);
-        const float crop[] = { zone.left, zone.right, zone.top, zone.bottom };
-        ImageFilm sensor(film->xResolution, film->yResolution, filter, crop, "foo.exr", false);
-        int xstart, xend, ystart, yend;
-        sensor.GetSampleExtent(&xstart, &xend, &ystart, &yend);
-
-        StratifiedSampler sampler(xstart, xend, ystart, yend,
-            16, 16, true, ShutterOpen, ShutterClose);
-
-        // Allocate space for samples and intersections
-        int maxSamples = sampler.MaximumSampleCount();
-        Sample *samples = origSample->Duplicate(maxSamples);
-        RayDifferential *rays = new RayDifferential[maxSamples];
-        Spectrum *Ls = new Spectrum[maxSamples];
-        Spectrum *Ts = new Spectrum[maxSamples];
-        Intersection *isects = new Intersection[maxSamples];
-
-        // Get samples from _Sampler_ and update image
-        int sampleCount;
-        while ((sampleCount = sampler.GetMoreSamples(samples, rng)) > 0) {
-            // Generate camera rays and compute radiance along rays
-            for (int i = 0; i < sampleCount; ++i) {
-                // Find camera ray for _sample[i]_
-
-                float rayWeight = this->GenerateRayDifferential(samples[i], &rays[i]);
-                rays[i].ScaleDifferentials(1.f / sqrtf(sampler.samplesPerPixel));
+        AfZone & zone = afZones[n];
 
 
-                // Evaluate radiance along camera ray
+        // golden ratio section search
 
-                if (rayWeight > 0.f)
-                    Ls[i] = rayWeight * renderer->Li(scene, rays[i], &samples[i], rng,
-                    arena, &isects[i], &Ts[i]);
-                else {
-                    Ls[i] = 0.f;
-                    Ts[i] = 1.f;
-                }
-
-                // Issue warning if unexpected radiance value returned
-                if (Ls[i].HasNaNs()) {
-                    Error("Not-a-number radiance value returned "
-                        "for image sample.  Setting to black.");
-                    Ls[i] = Spectrum(0.f);
-                } else if (Ls[i].y() < -1e-5) {
-                    Error("Negative luminance value, %f, returned"
-                        "for image sample.  Setting to black.", Ls[i].y());
-                    Ls[i] = Spectrum(0.f);
-                } else if (isinf(Ls[i].y())) {
-                    Error("Infinite luminance value returned"
-                        "for image sample.  Setting to black.");
-                    Ls[i] = Spectrum(0.f);
-                }
-
+        const float EPSILON = 2.f;
+        
+        const float alpha = 0.5f * (3.f - sqrtf(5));
+        float a = 0.5f * filmDistance;
+        float b = 1.5f * filmDistance;
+        float x0;
+        float x1;
+        float f_x0;
+        float f_x1;
+        bool f_x0_unknown = true;
+        bool f_x1_unknown = true;
+        while (b - a >= EPSILON) {
+            printf("filmDistance search range: [%f, %f]\n", a, b);
+            // calculate the f(x) that's not being reused from last iteration
+            if (f_x0_unknown) {
+                x0 = a + alpha * (b - a);
+                f_x0 = MLofAfZone(renderer, scene, origSample, zone, x0);
             }
-
-            // Report sample results to _Sampler_, add contributions to image
-            if (sampler.ReportResults(samples, rays, Ls, isects, sampleCount))
-            {
-                for (int i = 0; i < sampleCount; ++i)
-                {
-
-                    sensor.AddSample(samples[i], Ls[i]);
-
-                }
+            if (f_x1_unknown) {
+                x1 = a + (1 - alpha) * (b - a);
+                f_x1 = MLofAfZone(renderer, scene, origSample, zone, x1);
             }
-
-            // Free _MemoryArena_ memory from computing image sample values
-            arena.FreeAll();
+            // discard a third of the interval
+            if (f_x0 < f_x1) {
+                a = x0;
+                x0 = x1;
+                f_x0 = f_x1;
+                f_x0_unknown = false;
+                f_x1_unknown = true;
+            } else if (f_x0 > f_x1) {
+                b = x1;
+                x1 = x0;
+                f_x1 = f_x0;
+                f_x0_unknown = true;
+                f_x1_unknown = false;
+            } else {
+                // clip search range by 5% on each end; hopefully get
+                // different f(x)s next iteration
+                float c = 0.05f * (b - a);
+                a += c;
+                b -= c;
+                f_x0_unknown = true;
+                f_x1_unknown = true;
+            }
         }
 
-        float * rgb;
-        int width;
-        int height;
-        sensor.WriteRGB(&rgb, &width, &height, 1.f);
-        // YOUR CODE HERE! The rbg contents of the image for this zone
-        // are now stored in the array 'rgb'.  You can now do whatever
-        // processing you wish
-
-
-        //you own rgb  now so make sure to delete it:
-        delete[] rgb;
-        //if you want to see the output rendered from your sensor, uncomment this line (it will write a file called foo.exr)
-        //sensor.WriteImage(1.f);
-
-
-        delete[] samples;
-        delete[] rays;
-        delete[] Ls;
-        delete[] Ts;
-        delete[] isects;
+        filmDistance = 0.5f * (a + b);
+        updateRasterToCameraTransform();
     }
 }
