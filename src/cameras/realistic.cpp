@@ -129,6 +129,7 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
     getDiskOfLensSurface(lensSurfaces.back(), &diskZ, &diskRadius);
     RearLensDiskToCamera = Scale(diskRadius, diskRadius, 1.f)
                          * Translate(Vector(0.f, 0.f, diskZ));
+    rearLensDiskZOffset = diskZ - lensSurfaces.back().zIntercept;
 
     // compute area of rear lens disk
     rearLensDiskArea = M_PI * diskRadius * diskRadius;
@@ -325,7 +326,8 @@ ray->o = ray->o / 1000.0f;
 
     // calculate weight of this ray
     float filmRayDirZ2 = filmRay.d.z * filmRay.d.z;
-    return filmRayDirZ2 * filmRayDirZ2 * rearLensDiskArea / (filmDistance * filmDistance);
+    float filmToDiskDistance = filmDistance - rearLensDiskZOffset;
+    return filmRayDirZ2 * filmRayDirZ2 * rearLensDiskArea / (filmToDiskDistance * filmToDiskDistance);
 }
 
 void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sample * origSample) {
@@ -404,7 +406,9 @@ void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sampl
         nth_element(isects.begin(), isects.begin() + isects.size() / 2, isects.end());
         Point X = isects[isects.size() / 2].p;
 
-X = X * 1000.0f;
+        //Point X(0.f, 0.f, isects[isects.size() / 2].p.z);
+
+        X = X * 1000.0f;
         
         // We'll try to set the film distance so this point is in perfect focus.
         // To do this, we'll shoot rays from this point to the camera lens and
@@ -416,7 +420,7 @@ X = X * 1000.0f;
 
         const int RAYS_REQUIRED = 400;
 
-
+vector<vector<Point>> paths;
         Ray rays[RAYS_REQUIRED];
         Point oMean;
         Vector dMean;
@@ -428,12 +432,17 @@ X = X * 1000.0f;
             float v = rng.RandomFloat();
             float lensU, lensV;
             ConcentricSampleDisk(u, v, &lensU, &lensV);
+// project lensU, lensV to some fixed radius
+//float lensR = sqrtf(lensU*lensU + lensV*lensV);
+//lensU *= (0.4f / lensR);
+//lensV *= (0.4f / lensR);
             Point diskPoint = FrontLensDiskToCamera(Point(lensU, lensV, 0.f));
             //Ray Xray(X, Normalize(diskPoint - X), 0.f, INFINITY);
-            Vector XrayDir = Normalize(diskPoint - X);
+            Vector XrayDir = Normalize(diskPoint - X); //Vector(0, 0, -1);
             Ray Xray(diskPoint - 10.f * XrayDir, XrayDir, 0.f, INFINITY);
 
             // trace that ray through the lenses and record it if it hits the film plane
+
 path.clear();
             Ray ray;
             if (traceRayThruLensSurfaces(Xray, &ray, true)) {
@@ -442,11 +451,8 @@ path.clear();
                 dMean += ray.d;
                 raysMadeItToFilm++;
 
-path.push_back(ray.o + 20.f * ray.d);
-ofile << endl << path.size() << endl;
-for (Point& p : path) {
-    ofile << p.x << ' ' << p.y << ' ' << p.z << endl;
-}
+
+paths.push_back(path);
             }
         }
         oMean /= raysMadeItToFilm;
@@ -464,7 +470,7 @@ for (Point& p : path) {
         int convergentRays = 0;
         for (int i = 0; i < raysMadeItToFilm; i++) {
             Ray& ray = rays[i];
-            if (Dot(oMean - ray.o, ray.d - dMean) > 0.f) {  // convergent ray
+            //if (Dot(oMean - ray.o, ray.d - dMean) > 0.f) {  // convergent ray
                 // intersect ray with the film plane
                 assert(ray.d.z != 0.f);
                 float t = (filmZ - ray.o.z) / ray.d.z;
@@ -475,7 +481,14 @@ for (Point& p : path) {
                 pMean = pMean + filmIntersect;
                 qMean = qMean + q;
                 convergentRays++;
-            }
+
+paths[i].push_back(filmIntersect);
+paths[i].push_back(filmIntersect + 1.f*filmDistance * ray.d);
+ofile << endl << paths[i].size() << endl;
+for (Point& p : paths[i]) {
+    ofile << p.x << ' ' << p.y << ' ' << p.z << endl;
+}
+            //}
         }
         pMean = pMean / convergentRays;
         qMean = qMean / convergentRays;
@@ -494,11 +507,12 @@ for (Point& p : path) {
         }
         float deltaZ = -s1 / s2;
 
-        //filmDistance -= deltaZ;
+        filmDistance -= deltaZ;
         updateRasterToCameraTransform();
 
         delete[] samples;
 
 ofile.close();
+//exit(1);
 	}
 }

@@ -56,7 +56,9 @@ private:
    float filmDistance;
    float apertureDiameter;
    vector<LensSurface> lensSurfaces;    // ordered front to back
+   
    float rearLensDiskArea;
+   float rearLensDiskZOffset;       // equal to diskZ - rearLens.zIntercept
 
    Transform RasterToCamera;
    Transform RearLensDiskToCamera; // transforms point in unit circle to point on rear lens disk
