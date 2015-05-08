@@ -54,15 +54,10 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
 								   ShutterOpen(sopen),
 								   ShutterClose(sclose),
 								   film(f),
-                                   filmDiag(filmdiag * 1.000f),
-                                   filmDistance(filmdistance * 1.000f),
-                                   apertureDiameter(aperture_diameter_ * 1.000f)
+                                   filmDiag(filmdiag),
+                                   filmDistance(filmdistance),
+                                   apertureDiameter(aperture_diameter_)
 {
-
-
-	// YOUR CODE HERE -- build and store datastructures representing the given lens
-	// and film placement.
-
     char line[512];
 
     // parse lens file
@@ -84,21 +79,17 @@ RealisticCamera::RealisticCamera(const AnimatedTransform &cam2world,
             sscanf(line, "%f %f %f %f\n", &sphereRadius, &lensZThickness,
                 &refractiveIndex, &aperture);
 
-            sphereRadius *= 1.000f;
-            lensZThickness *= 1.000f;
-            aperture *= 1.000f;
-
             if (sphereRadius == 0.f) {
                 // aperture stop
                 refractiveIndex = 1.f;
                 if (apertureDiameter > aperture) {
                     Warning("Aperture diameter [%f] larger than max aperture [%f] in specfile.  Clamping to max.",
                         apertureDiameter, aperture);
-                    apertureDiameter = aperture;
+                } else {
+                    aperture = apertureDiameter;
                 }
             }
             
-
             LensSurface lensSurface;
             lensSurface.zIntercept = lensZIntercept;
             lensSurface.sphereRadius = abs(sphereRadius);
