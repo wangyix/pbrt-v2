@@ -206,7 +206,7 @@ bool RealisticCamera::traceRayThruLensSurfaces(const Ray& in, Ray* out,
                                 bool frontToBack) const {
     Ray ray = in;
 
-    // intersect ray with lens surfaces from rear to front
+    // intersect ray with lens surfaces from rear to front or front to rear
     for (int i = 0; i < lensSurfaces.size(); i++) {
 
         const LensSurface &lensSurface = frontToBack ?
@@ -279,14 +279,6 @@ bool RealisticCamera::traceRayThruLensSurfaces(const Ray& in, Ray* out,
 
 float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
 {
-  // YOUR CODE HERE -- make that ray!
-
-  // use sample->imageX and sample->imageY to get raster-space coordinates
-  // of the sample point on the film.
-  // use sample->lensU and sample->lensV to get a sample position on the lens
-
-  // GenerateRay() should return the weight of the generated ray
-
     // compute raster point in camera space
     Point Pras(sample.imageX, sample.imageY, 0);
     Point Pras_c;
@@ -303,14 +295,13 @@ float RealisticCamera::GenerateRay(const CameraSample &sample, Ray *ray) const
     
     if (!traceRayThruLensSurfaces(filmRay, ray, false))
         return 0.f;
-    
-    ray->o = ray->o * 0.001f;  // convert millimeters to meters
+
     CameraToWorld(*ray, ray);
     ray->d = Normalize(ray->d);
 
     // calculate weight of this ray
     float filmRayDirZ2 = filmRay.d.z * filmRay.d.z;
-    float filmToDiskDistance = filmDistance - rearLensDiskZOffset;
+    float filmToDiskDistance = filmDistance + rearLensDiskZOffset;
     return filmRayDirZ2 * filmRayDirZ2 * rearLensDiskArea / (filmToDiskDistance * filmToDiskDistance);
 }
 
@@ -425,7 +416,7 @@ float RealisticCamera::MLofAfZone(Renderer* renderer, const Scene* scene,
     }
 
     // compute focus measure (ML for border pixels not calculated)
-    const float ML_threshold = 0.05f;
+    const float ML_threshold = 0.0f;
     float F = 0.f;
     for (int y = 1; y < height - 1; y++) {
         for (int x = 1; x < width - 1; x++) {
@@ -449,17 +440,11 @@ float RealisticCamera::MLofAfZone(Renderer* renderer, const Scene* scene,
 
 
 void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sample * origSample) {
-	// YOUR CODE HERE:
-	// The current code shows how to create a new Sampler, and Film cropped to the size of the auto focus zone.
-	// It then renders the film, producing rgb values.  You need to:
-	//
-	// 1. Modify this code so that it can adjust film plane of the camera
-	// 2. Use the results of raytracing to evaluate whether the image is in focus
-	// 3. Search over the space of film planes to find the best-focused plane.
 
 	if(!autofocus)
 		return;
 
+    // just use the first autofocus zone; ignore the rest.
     
     //for (size_t i = 0; i<afZones.size(); i++) {
     for (size_t n = 0; n<1; n++) {
@@ -467,13 +452,123 @@ void  RealisticCamera::AutoFocus(Renderer * renderer, const Scene * scene, Sampl
         AfZone & zone = afZones[n];
 
 
+        // find range [a,b] where focus measure is (hopefully) unimodal.
+        // we're trying to get [a,b] to contain the first peak in focus measure
+        // when starting the film plane all the way in the front and then moving
+        // it towards the back.
+
+        // we'll calculate the focus measure f(x) at various filmDistances x.
+        // We'll start with x at half the filmDistance given by the scene description
+        // and increase it by stepSize each time.
+
+        const float PEAK_DROP_RATIO = 0.85f;
+        const float VALLEY_RISE_RATIO = 1.f / PEAK_DROP_RATIO;
+        const float stepSize = filmDistance / 15.f;
+
+        float a = 0.5f * filmDistance;
+        float b;
+
+        vector<float> f_xs; // f(x)s ordered from smaller to larger filmDistances
+
+        float f_x;
+        float x = a;
+
+        // go past first valley
+        float min_f_x = INFINITY;   // min f(x) after most recent peak
+        int min_f_x_index;
+        int i = 0;
+        while (true) {
+            f_x = MLofAfZone(renderer, scene, origSample, zone, x);
+            printf("Focus measure at filmDistance %.2f: %.2f\n", x, f_x);
+            if (f_x < min_f_x) {
+                min_f_x_index = i;
+                min_f_x = f_x;
+            } else if (f_x > min_f_x * VALLEY_RISE_RATIO) {
+                break;
+            }
+            f_xs.push_back(f_x);
+            x += stepSize;
+            i++;
+            if (x > filmDistance * 4.f) {
+                printf("Failed to find valley in focus measure! Autofocus will not occur.\n");
+                return;
+            }
+        }
+
+        // go past first peak after that
+        float max_f_x = f_x;
+        int max_f_x_index = i;
+
+        f_xs.push_back(f_x);
+        x += stepSize;
+        i++;
+
+        while (true) {
+            f_x = MLofAfZone(renderer, scene, origSample, zone, x);
+            printf("Focus measure at filmDistance %.2f: %.2f\n", x, f_x);
+            if (f_x > max_f_x) {
+                max_f_x_index = i;
+                max_f_x = f_x;
+            } else if (f_x < PEAK_DROP_RATIO * max_f_x) {
+                break;
+            }
+            f_xs.push_back(f_x);
+            x += stepSize;  // 10mm intervals
+            i++;
+            if (x > filmDistance * 4.f) {
+                printf("Failed to find peak in focus measure! Autofocus will not occur.\n");
+                return;
+            }
+        }
+        printf("Focus peak found!\n");
+        b = x;
+        // search backwards thru the recorded f(x)'s to find the first one where
+        // f(x) < max f(x) so that everything left of x can be discarded.
+        for (i = max_f_x_index - 1; i > min_f_x_index; i--) {
+            if (f_xs[i] < PEAK_DROP_RATIO * max_f_x)
+                break;
+        }
+        a += i * stepSize;
+
+        assert(f_xs[min_f_x_index] == min_f_x);
+        assert(f_xs[max_f_x_index] == max_f_x);
+        
+        /*
+        const float PEAK_DROP_RATIO = 0.85f;
+        const float VALLEY_RISE_RATIO = 1.f / PEAK_DROP_RATIO;
+
+        float a = 0.5f * filmDistance;
+        float b = 2.f * filmDistance;
+        float stepSize = filmDistance / 15.f;
+
+        vector<float> f_xs;
+        for (float x = a; x <= b; x += stepSize) {
+            float f_x = MLofAfZone(renderer, scene, origSample, zone, x);
+            f_xs.push_back(f_x);
+            printf("Focus measure at filmDistance %.2f: %.2f\n", x, f_x);
+        }
+
+        float maxPeak = 0.f;
+        int maxPeakIndex;
+        for (int i = 1; i < f_xs.size() - 1; i++) {
+            if (f_xs[i - 1] < PEAK_DROP_RATIO * f_xs[i] 
+                && f_xs[i] * PEAK_DROP_RATIO > f_xs[i + 1]
+                && f_xs[i] > maxPeak) {
+                maxPeak = f_xs[i];
+                maxPeakIndex = i;
+            }
+        }
+        a += (maxPeakIndex - 1) * stepSize;
+        b = a + 2 * stepSize;
+        */
+
+        // Now we have an interval [a,b] that contains a peak of the focus measure.
+        // We'll now find the x that maximizes f(x) within that interval using
         // golden ratio section search
 
         const float EPSILON = 2.f;
-        
         const float alpha = 0.5f * (3.f - sqrtf(5));
-        float a = 0.5f * filmDistance;
-        float b = 1.5f * filmDistance;
+        
         printf("\nfilmDistance search range: [%.2f, %.2f]\n", a, b);
         float x0;
         float x1;
