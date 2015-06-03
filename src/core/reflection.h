@@ -43,6 +43,7 @@
 #include "rng.h"
 #include "spectrum.h"
 #include "kdtree.h"
+#include "glintsmapdata.h"
 
 // Reflection Declarations
 Spectrum FrDiel(float cosi, float cost, const Spectrum &etai,
@@ -456,6 +457,48 @@ public:
 private:
     float ex, ey;
 };
+
+
+
+
+class GlintsNormalMapDistribution: public MicrofacetDistribution {
+public:
+    GlintsNormalMapDistribution(float uu, float vv,
+        float duu0, float dvv0, float duu1, float dvv1, float rough,
+        const GlintsMapData* mapData)
+        : u(uu), v(vv), du0(duu0), dv0(dvv0), du1(duu1), dv1(dvv1),
+        roughness(rough), glintsMapData(mapData) {}
+
+    float D(const Vector &wh) const {
+        float s = wh.x;
+        float t = wh.y;
+        float D_st = glintsMapData->D(s, t, u, v, du0, dv0, du1, dv1, roughness);
+        // we want to calculate D_w = cos(theta) * D_st
+        return wh.z * D_st;
+    }
+
+    void Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const {
+        // sample normal map at u,v
+
+        // perturb using roughness
+    }
+
+    float Pdf(const Vector &wo, const Vector &wi) const {
+    }
+
+
+private:
+    float u, v, du0, dv0, du1, dv1;     // describes pixel footprint
+    float roughness;
+
+    const GlintsMapData* glintsMapData;
+};
+
+
+
+
+
+
 
 
 class FresnelBlend : public BxDF {

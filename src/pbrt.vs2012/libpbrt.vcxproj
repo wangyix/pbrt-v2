@@ -175,6 +175,7 @@
     <ClInclude Include="..\core\filter.h" />
     <ClInclude Include="..\core\floatfile.h" />
     <ClInclude Include="..\core\geometry.h" />
+    <ClInclude Include="..\core\glintsmapdata.h" />
     <ClInclude Include="..\core\imageio.h" />
     <ClInclude Include="..\core\targa.h" />
     <ClInclude Include="..\core\integrator.h" />
@@ -234,6 +235,7 @@
     <ClInclude Include="..\lights\projection.h" />
     <ClInclude Include="..\lights\spot.h" />
     <ClInclude Include="..\materials\glass.h" />
+    <ClInclude Include="..\materials\glints.h" />
     <ClInclude Include="..\materials\kdsubsurface.h" />
     <ClInclude Include="..\materials\matte.h" />
     <ClInclude Include="..\materials\measured.h" />
@@ -272,6 +274,7 @@
     <ClInclude Include="..\textures\constant.h" />
     <ClInclude Include="..\textures\dots.h" />
     <ClInclude Include="..\textures\fbm.h" />
+    <ClInclude Include="..\textures\glintsnormalmap.h" />
     <ClInclude Include="..\textures\imagemap.h" />
     <ClInclude Include="..\textures\marble.h" />
     <ClInclude Include="..\textures\mix.h" />
@@ -1109,6 +1112,7 @@
     <ClCompile Include="..\core\filter.cpp" />
     <ClCompile Include="..\core\floatfile.cpp" />
     <ClCompile Include="..\core\geometry.cpp" />
+    <ClCompile Include="..\core\glintsmapdata.cpp" />
     <ClCompile Include="..\core\imageio.cpp" />
     <ClCompile Include="..\core\StdAfx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -1195,6 +1199,7 @@
     <ClCompile Include="..\lights\projection.cpp" />
     <ClCompile Include="..\lights\spot.cpp" />
     <ClCompile Include="..\materials\glass.cpp" />
+    <ClCompile Include="..\materials\glints.cpp" />
     <ClCompile Include="..\materials\kdsubsurface.cpp" />
     <ClCompile Include="..\materials\matte.cpp" />
     <ClCompile Include="..\materials\measured.cpp" />
@@ -1233,6 +1238,7 @@
     <ClCompile Include="..\textures\constant.cpp" />
     <ClCompile Include="..\textures\dots.cpp" />
     <ClCompile Include="..\textures\fbm.cpp" />
+    <ClCompile Include="..\textures\glintsnormalmap.cpp" />
     <ClCompile Include="..\textures\imagemap.cpp" />
     <ClCompile Include="..\textures\marble.cpp" />
     <ClCompile Include="..\textures\mix.cpp" />

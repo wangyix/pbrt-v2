@@ -88,6 +88,7 @@
 #include "materials/shinymetal.h"
 #include "materials/translucent.h"
 #include "materials/uber.h"
+#include "materials/glints.h"
 #include "renderers/aggregatetest.h"
 #include "renderers/createprobes.h"
 #include "renderers/metropolis.h"
@@ -121,6 +122,7 @@
 #include "textures/uv.h"
 #include "textures/windy.h"
 #include "textures/wrinkled.h"
+#include "textures/glintsnormalmap.h"
 #include "volumes/exponential.h"
 #include "volumes/homogeneous.h"
 #include "volumes/volumegrid.h"
@@ -403,6 +405,8 @@ Reference<Material> MakeMaterial(const string &name,
         material = CreateMeasuredMaterial(mtl2world, mp);
     else if (name == "shinymetal")
         material = CreateShinyMetalMaterial(mtl2world, mp);
+    else if (name == "glints")
+        material = CreateGlintsMaterial(mtl2world, mp);
     else
         Warning("Material \"%s\" unknown.", name.c_str());
     mp.ReportUnused();
@@ -472,6 +476,8 @@ Reference<Texture<Spectrum> > MakeSpectrumTexture(const string &name,
         tex = CreateMarbleSpectrumTexture(tex2world, tp);
     else if (name == "windy")
         tex = CreateWindySpectrumTexture(tex2world, tp);
+    else if (name == "glintsnormalmap")
+        tex = CreateGlintsNormalTexture(tex2world, tp);
     else
         Warning("Spectrum texture \"%s\" unknown.", name.c_str());
     tp.ReportUnused();
@@ -1180,6 +1186,7 @@ void pbrtWorldEnd() {
                                  namedCoordinateSystems.end());
     ImageTexture<float, float>::ClearCache();
     ImageTexture<RGBSpectrum, Spectrum>::ClearCache();
+    GlintsNormalTexture::ClearCache();
 }
 
 
