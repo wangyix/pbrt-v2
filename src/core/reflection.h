@@ -111,17 +111,18 @@ enum BxDFType {
     BSDF_DIFFUSE      = 1<<2,
     BSDF_GLOSSY       = 1<<3,
     BSDF_SPECULAR     = 1<<4,
-    BSDF_GLINTS       = 1<<5,       // use this as flags for Sample_f to only sample the GlintsMicrofacet BxDF
+    BSDF_GLINTS       = 1<<5,
     BSDF_ALL_TYPES        = BSDF_DIFFUSE |
                             BSDF_GLOSSY |
-                            BSDF_SPECULAR |
-                            BSDF_GLINTS,
+                            BSDF_SPECULAR,
     BSDF_ALL_REFLECTION   = BSDF_REFLECTION |
                             BSDF_ALL_TYPES,
     BSDF_ALL_TRANSMISSION = BSDF_TRANSMISSION |
                             BSDF_ALL_TYPES,
     BSDF_ALL              = BSDF_ALL_REFLECTION |
-                            BSDF_ALL_TRANSMISSION
+                            BSDF_ALL_TRANSMISSION,
+
+    BSDF_GLINTS_ALL       = BSDF_ALL | BSDF_GLINTS
 };
 
 
@@ -206,14 +207,7 @@ public:
     virtual ~BxDF() { }
     BxDF(BxDFType t) : type(t) { }
     bool MatchesFlags(BxDFType flags) const {
-        // handle glints case
-        if (flags == BSDF_GLINTS) {
-            return (type & BSDF_GLINTS);
-        }
         return (type & flags) == type;
-    }
-    bool IsGlintsMicrofacet() const {
-        return (type & BSDF_GLINTS);
     }
     virtual Spectrum f(const Vector &wo, const Vector &wi) const = 0;
     virtual Spectrum Sample_f(const Vector &wo, Vector *wi,

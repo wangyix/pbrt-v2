@@ -68,7 +68,7 @@ Spectrum UniformSampleAllPointLightsFromGlintsMaterial(const Scene *scene,
 
             if (!Li.IsBlack() && visibility.Unoccluded(scene)) {    // && lightPdf > 0.) {
 
-                Spectrum f = bsdf->f(wo, wi, BSDF_GLINTS);
+                Spectrum f = bsdf->f(wo, wi, BSDF_GLINTS_ALL);
 
                 if (!f.IsBlack() ) {
                     // Add light's contribution to reflected radiance

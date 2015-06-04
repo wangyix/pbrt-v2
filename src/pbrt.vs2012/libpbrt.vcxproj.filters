@@ -921,6 +921,12 @@
     <ClInclude Include="..\core\glintsmapdata.h">
       <Filter>Header Files\core</Filter>
     </ClInclude>
+    <ClInclude Include="..\integrators\glintsdirectlighting.h">
+      <Filter>Header Files\integrators</Filter>
+    </ClInclude>
+    <ClInclude Include="..\samplers\pixelcenters.h">
+      <Filter>Header Files\samplers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\3rdparty\ilmbase-1.0.2\half.cpp">
@@ -1699,6 +1705,12 @@
     </ClCompile>
     <ClCompile Include="..\core\glintsmapdata.cpp">
       <Filter>Source Files\core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\integrators\glintsdirectlighting.cpp">
+      <Filter>Source Files\integrators</Filter>
+    </ClCompile>
+    <ClCompile Include="..\samplers\pixelcenters.cpp">
+      <Filter>Source Files\samplers</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
