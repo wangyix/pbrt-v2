@@ -111,7 +111,7 @@ enum BxDFType {
     BSDF_DIFFUSE      = 1<<2,
     BSDF_GLOSSY       = 1<<3,
     BSDF_SPECULAR     = 1<<4,
-    BSDF_GLINTS       = 1<<5,
+    BSDF_GLINTS       = 1<<5,       // use this as flags for Sample_f to only sample the GlintsMicrofacet BxDF
     BSDF_ALL_TYPES        = BSDF_DIFFUSE |
                             BSDF_GLOSSY |
                             BSDF_SPECULAR |
@@ -206,7 +206,14 @@ public:
     virtual ~BxDF() { }
     BxDF(BxDFType t) : type(t) { }
     bool MatchesFlags(BxDFType flags) const {
+        // handle glints case
+        if (flags == BSDF_GLINTS) {
+            return (type & BSDF_GLINTS);
+        }
         return (type & flags) == type;
+    }
+    bool IsGlintsMicrofacet() const {
+        return (type & BSDF_GLINTS);
     }
     virtual Spectrum f(const Vector &wo, const Vector &wi) const = 0;
     virtual Spectrum Sample_f(const Vector &wo, Vector *wi,
@@ -426,8 +433,11 @@ protected:
 
 
 struct GlintsPixelFootprint {
+    GlintsPixelFootprint()
+        : u(0.0f), v(0.0f), dudx(0.0f), dvdx(0.0f), dudy(0.0f), dvdy(0.0f) {}
     GlintsPixelFootprint(float uu, float vv, float duudx, float dvvdx, float duudy, float dvvdy)
         : u(uu), v(vv), dudx(duudx), dvdx(dvvdx), dudy(duudy), dvdy(dvvdy) {}
+
     float u, v, dudx, dvdx, dudy, dvdy;
 };
 
@@ -463,10 +473,9 @@ public:
     void useApproximationDistribution() const {
         useApproximation = true;
     }
-    void useNormalMapDistribution(float x_offset, float y_offset) const {
-        // x_offset,y_offset is offset of image sample from the center of its pixel
+    void useNormalMapDistribution(float dx, float dy, float scale) const {
         useApproximation = false;
-        normalMapDistribution->setSampleOffsetFromCenter(x_offset, y_offset);
+        normalMapDistribution->setPixelFootprintFromSample(dx, dy, scale);
     }
 private:
     GlintsNormalMapDistribution* normalMapDistribution;
@@ -478,11 +487,10 @@ private:
 
 class GlintsNormalMapDistribution : public MicrofacetDistribution {
 public:
-    GlintsNormalMapDistribution(const GlintsPixelFootprint& sampleFootprint,
+    GlintsNormalMapDistribution(const GlintsPixelFootprint& sampleFp,
         float rough, const GlintsMapData* mapData)
-        : footprint(sampleFootprint),
-        ray_u(sampleFootprint.u),
-        ray_v(sampleFootprint.v),
+        : sampleFootprint(sampleFp),
+        pixelFootprint(),
         roughness(rough),
         glintsMapData(mapData) {}
 
@@ -495,7 +503,7 @@ public:
             s = wh.x;
             t = wh.y;
         }
-        float D_st = glintsMapData->D(s, t, footprint, roughness);
+        float D_st = glintsMapData->D(s, t, pixelFootprint, roughness);
         // we want to calculate D_w = cos(theta) * D_st
         return wh.z * D_st;
     }
@@ -503,7 +511,7 @@ public:
     void Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const {
         // sample normal map at where the ray hit
         float s, t;
-        glintsMapData->normalAt(ray_u, ray_v, &s, &t);
+        glintsMapData->normalAt(sampleFootprint.u, sampleFootprint.v, &s, &t);
         // perturb using roughness
         float ds, dt;
         SampleDiskGaussian(u1, u2, &ds, &dt);
@@ -525,7 +533,7 @@ public:
         // compute wi by reflecting wo across wh
         *wi = -wo + 2.f * Dot(wo, wh) * wh;
         // evaluate pdf
-        float D_st = glintsMapData->D(s, t, footprint, roughness);
+        float D_st = glintsMapData->D(s, t, pixelFootprint, roughness);
         *pdf = z_sq * D_st / (4.f * Dot(wo, wh));   // z_sq is AbsCosTheta(wh)
     }
 
@@ -537,19 +545,24 @@ public:
             return 0.f;
         }
         // evaluate pdf
-        float D_st = glintsMapData->D(wh.x, wh.y, footprint, roughness);
+        float D_st = glintsMapData->D(wh.x, wh.y, pixelFootprint, roughness);
         return AbsCosTheta(wh) * D_st / (4.f * Dot(wo, wh));
     }
 
-    void setSampleOffsetFromCenter(float dx, float dy) const {
-        // shift footprint to center of the pixel that the sample belongs to
-        footprint.u = ray_u - footprint.dudx * dx - footprint.dudy * dy;
-        footprint.v = ray_v - footprint.dvdx * dx - footprint.dvdy * dy;
+    void setPixelFootprintFromSample(float dx, float dy, float scale) const {
+        // scale footprint to pixel size??????????
+        pixelFootprint.dudx = scale * sampleFootprint.dudx;
+        pixelFootprint.dvdx = scale * sampleFootprint.dvdx;
+        pixelFootprint.dudy = scale * sampleFootprint.dudy;
+        pixelFootprint.dvdy = scale * sampleFootprint.dvdy;
+        // move center to pixel center
+        pixelFootprint.u = sampleFootprint.u - pixelFootprint.dudx * dx - pixelFootprint.dudy * dy;
+        pixelFootprint.v = sampleFootprint.v - pixelFootprint.dvdx * dx - pixelFootprint.dvdy * dy;
     }
 
 private:
-    float ray_u, ray_v;                     // texcoords of where the sample ray hit
-    mutable GlintsPixelFootprint footprint; // footprint centered on pixel center
+    GlintsPixelFootprint sampleFootprint;         // footprint of the sample
+    mutable GlintsPixelFootprint pixelFootprint; // footprint of the pixel of the sample
     float roughness;                        // std of the gaussian used to convolve D(s,t) 
     const GlintsMapData* glintsMapData;
 };

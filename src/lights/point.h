@@ -55,6 +55,9 @@ public:
     float Pdf(const Point &, const Vector &) const;
     void SHProject(const Point &p, float pEpsilon, int lmax, const Scene *scene,
         bool computeLightVisibility, float time, RNG &rng, Spectrum *coeffs) const;
+
+    bool isPointLight() const { return true; }
+
 private:
     // PointLight Private Data
     Point lightPos;

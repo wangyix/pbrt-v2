@@ -75,6 +75,12 @@ Spectrum UniformSampleAllLights(const Scene *scene, const Renderer *renderer,
     float rayEpsilon, float time, BSDF *bsdf, const Sample *sample, RNG &rng,
     const LightSampleOffsets *lightSampleOffsets,
     const BSDFSampleOffsets *bsdfSampleOffsets);
+Spectrum UniformSampleAllPointLightsFromGlintsMaterial(const Scene *scene,
+    const Renderer *renderer, MemoryArena &arena, const Point &p,
+    const Normal &n, const Vector &wo, float rayEpsilon,
+    float time, BSDF *bsdf, const Sample *sample, RNG &rng);
+    //const LightSampleOffsets *lightSampleOffsets,
+    //const BSDFSampleOffsets *bsdfSampleOffsets);
 Spectrum UniformSampleOneLight(const Scene *scene, const Renderer *renderer,
     MemoryArena &arena, const Point &p, const Normal &n, const Vector &wo,
     float rayEpsilon, float time, BSDF *bsdf,

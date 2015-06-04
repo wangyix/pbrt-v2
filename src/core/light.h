@@ -74,6 +74,8 @@ public:
         const Scene *scene, bool computeLightVisibility, float time,
         RNG &rng, Spectrum *coeffs) const;
 
+    virtual bool isPointLight() const { return false; }
+
     // Light Public Data
     const int nSamples;
 protected:

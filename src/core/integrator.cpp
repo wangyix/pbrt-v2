@@ -42,6 +42,48 @@ Integrator::~Integrator() {
 }
 
 
+Spectrum UniformSampleAllPointLightsFromGlintsMaterial(const Scene *scene,
+    const Renderer *renderer, MemoryArena &arena, const Point &p,
+    const Normal &n, const Vector &wo, float rayEpsilon,
+    float time, BSDF *bsdf, const Sample *sample, RNG &rng) {
+    //const LightSampleOffsets *lightSampleOffsets,
+    //const BSDFSampleOffsets *bsdfSampleOffsets
+
+    Spectrum L(0.);
+
+    for (uint32_t i = 0; i < scene->lights.size(); ++i) {
+        Light *light = scene->lights[i];
+        if (!light->isPointLight())
+            continue;
+        
+        Spectrum Ld(0.);
+        // Code from EstimateDirectLighting() for deltaLight case
+        {
+            Vector wi;
+            float lightPdf, bsdfPdf;
+            VisibilityTester visibility;
+
+            Spectrum Li = light->Sample_L(p, rayEpsilon, LightSample(), time,
+                &wi, &lightPdf, &visibility);   // point lights don't use the lightSample param
+
+            if (!Li.IsBlack() && visibility.Unoccluded(scene)) {    // && lightPdf > 0.) {
+
+                Spectrum f = bsdf->f(wo, wi, BSDF_GLINTS);
+
+                if (!f.IsBlack() ) {
+                    // Add light's contribution to reflected radiance
+                    Li *= visibility.Transmittance(scene, renderer, NULL, rng, arena);
+                    Ld += f * Li * (AbsDot(wi, n) / lightPdf);
+                }
+            }
+        }
+        L += Ld;
+    }
+    return L;
+}
+
+
+
 
 // Integrator Utility Functions
 Spectrum UniformSampleAllLights(const Scene *scene,
