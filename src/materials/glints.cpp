@@ -33,11 +33,12 @@ BSDF *GlintsMaterial::GetBSDF(const DifferentialGeometry &dgGeom,
     // find pixel footprint in texture
     float s, t, dsdx, dtdx, dsdy, dtdy;
     normalMap->getMapping()->Map(dgs, &s, &t, &dsdx, &dtdx, &dsdy, &dtdy);
-
+    GlintsPixelFootprint fp(s, t, dsdx, dtdx, dsdy, dtdy);
+    
     float rough = roughness->Evaluate(dgs);
 
     GlintsNormalMapDistribution *md = BSDF_ALLOC(arena, GlintsNormalMapDistribution)
-        (s, t, rough, normalMap->getMapData());
+        (fp, rough, normalMap->getMapData());
 
     // PLACEHOLDER!!!!!!
     MicrofacetDistribution* mdApprox = BSDF_ALLOC(arena, Blinn)(10.0f);
