@@ -111,9 +111,11 @@ enum BxDFType {
     BSDF_DIFFUSE      = 1<<2,
     BSDF_GLOSSY       = 1<<3,
     BSDF_SPECULAR     = 1<<4,
+    BSDF_GLINTS       = 1<<5,
     BSDF_ALL_TYPES        = BSDF_DIFFUSE |
                             BSDF_GLOSSY |
-                            BSDF_SPECULAR,
+                            BSDF_SPECULAR |
+                            BSDF_GLINTS,
     BSDF_ALL_REFLECTION   = BSDF_REFLECTION |
                             BSDF_ALL_TYPES,
     BSDF_ALL_TRANSMISSION = BSDF_TRANSMISSION |
@@ -412,12 +414,137 @@ public:
     Spectrum Sample_f(const Vector &wo, Vector *wi,
                               float u1, float u2, float *pdf) const;
     float Pdf(const Vector &wo, const Vector &wi) const;
-private:
+protected:
     // Microfacet Private Data
     Spectrum R;
-    MicrofacetDistribution *distribution;
+    mutable MicrofacetDistribution *distribution;
     Fresnel *fresnel;
 };
+
+
+
+
+
+struct GlintsPixelFootprint {
+    float u, v, du0, dv0, du1, dv1;
+};
+
+
+class GlintsMicrofacet : public Microfacet {
+public:
+    GlintsMicrofacet(const Spectrum &reflectance, Fresnel *f,
+        GlintsNormalMapDistribution *dist, MicrofacetDistribution* approx)
+        : Microfacet(reflectance, f, NULL),
+        normalMapDistribution(dist),
+        ndfApproximation(approx)
+    {
+        *(const_cast<BxDFType*>(&type)) = BxDFType(BSDF_REFLECTION | BSDF_GLOSSY | BSDF_GLINTS);
+    }
+
+    // for f, Sample_f, Pdf, set the distribution to the normalMapDIstribution or the 
+    // approximatino before doing the calculations
+    Spectrum f(const Vector &wo, const Vector &wi) const {
+        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
+        return Microfacet::f(wo, wi);
+    }
+    Spectrum Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const {
+        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
+        return Microfacet::Sample_f(wo, wi, u1, u2, pdf);
+    }
+    float Pdf(const Vector &wo, const Vector &wi) const {
+        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
+        return Microfacet::Pdf(wo, wi);
+    }
+
+    // methods called be integrator before sampling/evualating
+    void setUseApproximation(bool use) const {
+        useApproximation = use;
+    }
+    void setPixelFootprint(GlintsPixelFootprint& fp) const {
+        normalMapDistribution->footprint = fp;
+    }
+private:
+    GlintsNormalMapDistribution* normalMapDistribution;
+    MicrofacetDistribution* ndfApproximation;
+    mutable bool useApproximation;
+};
+
+
+
+class GlintsNormalMapDistribution : public MicrofacetDistribution {
+public:
+    GlintsNormalMapDistribution(float ray_uu, float ray_vv, float rough, const GlintsMapData* mapData)
+        : ray_u(ray_uu), ray_v(ray_vv), roughness(rough), glintsMapData(mapData) {}
+
+    float D(const Vector &wh) const {
+        float s, t;
+        if (wh.z < 0.0f) {
+            s = -wh.x;
+            t = -wh.y;
+        } else {
+            s = wh.x;
+            t = wh.y;
+        }
+        float D_st = glintsMapData->D(s, t, footprint, roughness);
+        // we want to calculate D_w = cos(theta) * D_st
+        return wh.z * D_st;
+    }
+
+    void Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const {
+        // sample normal map at where the ray hit
+        float s, t;
+        glintsMapData->normalAt(ray_u, ray_v, &s, &t);
+        // perturb using roughness
+        float ds, dt;
+        SampleDiskGaussian(u1, u2, &ds, &dt);
+        s += (roughness * ds);
+        t += (roughness * dt);
+        // check if this normal (s,t) falls within unit disk
+        float z_sq = 1.0f - s*s - t*t;
+        if (z_sq < 0.0f) {
+            *pdf = 0.f;
+            return;
+        }
+        Vector wh(s, t, sqrtf(z_sq));
+        if (!SameHemisphere(wo, wh)) wh = -wh;
+        // check if wo is on the wrong side of this facet
+        if (Dot(wo, wh) <= 0.f) {
+            *pdf = 0.f;
+            return;
+        }
+        // compute wi by reflecting wo across wh
+        *wi = -wo + 2.f * Dot(wo, wh) * wh;
+        // evaluate pdf
+        float D_st = glintsMapData->D(s, t, footprint, roughness);
+        *pdf = z_sq * D_st / (4.f * Dot(wo, wh));   // z_sq is AbsCosTheta(wh)
+    }
+
+    float Pdf(const Vector &wo, const Vector &wi) const {
+        Vector wh = Normalize(wo + wi);
+        if (!SameHemisphere(wo, wh)) wh = -wh;
+        // check if wo is on the wrong side of this facet
+        if (Dot(wo, wh) <= 0.f) {
+            return 0.f;
+        }
+        // evaluate pdf
+        float D_st = glintsMapData->D(wh.x, wh.y, footprint, roughness);
+        return AbsCosTheta(wh) * D_st / (4.f * Dot(wo, wh));
+    }
+
+private:
+    float ray_u, ray_v; // texcoords of the ray intersection point
+    float roughness;    // std of the gaussian used to convolve D(s,t) 
+    const GlintsMapData* glintsMapData;
+public:
+    // params set by integrator before sampling or evaluating
+    mutable GlintsPixelFootprint footprint; 
+};
+
+
+
+
+
+
 
 
 class Blinn : public MicrofacetDistribution {
@@ -459,40 +586,6 @@ private:
 };
 
 
-
-
-class GlintsNormalMapDistribution: public MicrofacetDistribution {
-public:
-    GlintsNormalMapDistribution(float uu, float vv,
-        float duu0, float dvv0, float duu1, float dvv1, float rough,
-        const GlintsMapData* mapData)
-        : u(uu), v(vv), du0(duu0), dv0(dvv0), du1(duu1), dv1(dvv1),
-        roughness(rough), glintsMapData(mapData) {}
-
-    float D(const Vector &wh) const {
-        float s = wh.x;
-        float t = wh.y;
-        float D_st = glintsMapData->D(s, t, u, v, du0, dv0, du1, dv1, roughness);
-        // we want to calculate D_w = cos(theta) * D_st
-        return wh.z * D_st;
-    }
-
-    void Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const {
-        // sample normal map at u,v
-
-        // perturb using roughness
-    }
-
-    float Pdf(const Vector &wo, const Vector &wi) const {
-    }
-
-
-private:
-    float u, v, du0, dv0, du1, dv1;     // describes pixel footprint
-    float roughness;
-
-    const GlintsMapData* glintsMapData;
-};
 
 
 

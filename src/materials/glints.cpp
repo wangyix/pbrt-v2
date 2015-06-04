@@ -35,12 +35,17 @@ BSDF *GlintsMaterial::GetBSDF(const DifferentialGeometry &dgGeom,
     normalMap->getMapping()->Map(dgs, &s, &t, &dsdx, &dtdx, &dsdy, &dtdy);
 
     float rough = roughness->Evaluate(dgs);
-    MicrofacetDistribution *md = BSDF_ALLOC(arena, GlintsNormalMapDistribution)
-        (s, t, dsdx, dtdx, dsdy, dtdy, rough, normalMap->getMapData());
+
+    GlintsNormalMapDistribution *md = BSDF_ALLOC(arena, GlintsNormalMapDistribution)
+        (s, t, rough, normalMap->getMapData());
+
+    // PLACEHOLDER!!!!!!
+    MicrofacetDistribution* mdApprox = BSDF_ALLOC(arena, Blinn)(10.0f);
 
     Fresnel *frMf = BSDF_ALLOC(arena, FresnelConductor)(eta->Evaluate(dgs),
         k->Evaluate(dgs));
-    bsdf->Add(BSDF_ALLOC(arena, Microfacet)(1., frMf, md));
+
+    bsdf->Add(BSDF_ALLOC(arena, GlintsMicrofacet)(1., frMf, md, mdApprox));
     return bsdf;
     
     

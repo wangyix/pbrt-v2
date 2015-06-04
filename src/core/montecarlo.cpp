@@ -251,7 +251,28 @@ void LDPixelSample(int xPos, int yPos, float shutterOpen,
     }
 }
 
+void SampleDiskGaussian(float *x, float *y, RNG &rng) {
+    float sx, sy;
+    float w;
+    do {
+        sx = 1.f - 2.f * rng.RandomFloat();
+        sy = 1.f - 2.f * rng.RandomFloat();
+        w = sx*sx + sy*sy;
+    } while (w >= 1.f);
+    w = sqrtf((-2.0f * log(w)) / w);
+    *x = w * sx;
+    *y = w * sy;
+}
 
+void SampleDiskGaussian(float u1, float u2, float *x, float *y) {
+    float r = sqrtf(u1);
+    float theta = 2.0f * M_PI * u2;
+    float sx = r * cosf(theta);
+    float sy = r * sinf(theta);
+    r = sqrtf((-2.0f * log(r)) / r);
+    *x = r * sx;
+    *y = r * sy;
+}
 
 // Monte Carlo Function Definitions
 void RejectionSampleDisk(float *x, float *y, RNG &rng) {
