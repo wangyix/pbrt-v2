@@ -41,7 +41,7 @@ BSDF *GlintsMaterial::GetBSDF(const DifferentialGeometry &dgGeom,
         (fp, rough, normalMap->getMapData());
 
     // PLACEHOLDER!!!!!!
-    MicrofacetDistribution* mdApprox = BSDF_ALLOC(arena, Blinn)(10.0f);
+    MicrofacetDistribution* mdApprox = BSDF_ALLOC(arena, Blinn)(1.0f);
 
     Fresnel *frMf = BSDF_ALLOC(arena, FresnelConductor)(eta->Evaluate(dgs),
         k->Evaluate(dgs));
@@ -102,9 +102,7 @@ GlintsMaterial *CreateGlintsMaterial(const Transform &xform, const TextureParams
     Reference<Texture<float> > bumpMap = mp.GetFloatTextureOrNull("bumpmap");
 
     // default normalMap is the constant (0,0,1);
-    float e3[3] = { 0.0f, 0.0f, 1.0f };
-    static Spectrum defaultNormal = Spectrum::FromRGB(e3);
-    Reference<Texture<Spectrum> > normalMap = mp.GetSpectrumTexture("normalmap", defaultNormal);
+    Reference<Texture<Spectrum> > normalMap = mp.GetSpectrumTexture("normalmap", Spectrum());
     
     // change normalMap reference from type Texture<Spectrum> to GlintsNormalTexture using casts
     const Texture<Spectrum>* normalMapPtrConst = normalMap.GetPtr();
@@ -112,6 +110,7 @@ GlintsMaterial *CreateGlintsMaterial(const Transform &xform, const TextureParams
     GlintsNormalTexture* p = dynamic_cast<GlintsNormalTexture*>(normalMapPtr);
     if (!p) {
         printf("Bad cast from Texture<Spectrum> to GlintsNormalTexture during CreateGlintsMaterial()!\n");
+        printf("Make sure the \"texture normalmap\" param of the glints material is type \"spectrum\" \"glintsnormalmap\"\n");
         exit(1);
     }
     Reference<GlintsNormalTexture> normalMapCasted(p);

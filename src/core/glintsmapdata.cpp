@@ -18,12 +18,13 @@ float GlintsMapData::D(float s, float t,
     float roughness) const {
 
     // PLACEHOLDER: blinn distribution
-    float exponent = 10.0f;
-    float costhetah = sqrtf(1.0f - s*s - t*t);
-    return (exponent + 2) * INV_TWOPI * powf(costhetah, exponent);
+    float exponent = 1.0f / roughness;
+    float costhetah = sqrtf(max(1.0f - s*s - t*t, 0.0f));
+    float D_w = (exponent + 2) * INV_TWOPI * powf(costhetah, exponent);
+    return D_w / costhetah;    // convert to D_st
 }
 
-#include "rng.h"
+#include "rng.h"    // FOR THE BLINN PLACEHOLDER
 #include "montecarlo.h"
 
 void GlintsMapData::normalAt(float u, float v, float* s, float* t) const {

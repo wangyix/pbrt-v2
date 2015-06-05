@@ -3,17 +3,19 @@
 #include "montecarlo.h"
 #include "camera.h"
 
+#define nSamples 100
+
 PixelCentersSampler::PixelCentersSampler(int xstart, int xend,
     int ystart, int yend, float sopen, float sclose)
-    : Sampler(xstart, xend, ystart, yend, 1, sopen, sclose) {
+    : Sampler(xstart, xend, ystart, yend, nSamples, sopen, sclose) {
     xPos = xPixelStart;
     yPos = yPixelStart;
     // Get storage for a pixel's worth of stratified samples
-    lensSamples = AllocAligned<float>(3);
-    timeSamples = lensSamples + 2;
+    lensSamples = AllocAligned<float>(3 * nSamples);
+    timeSamples = lensSamples + 2 * nSamples;
 
     RNG rng(xstart + ystart * (xend - xstart));
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 3 * nSamples; ++i)
         lensSamples[i] = rng.RandomFloat();
 
     samplePos = 0;
@@ -31,7 +33,7 @@ Sampler *PixelCentersSampler::GetSubSampler(int num, int count) {
 
 
 int PixelCentersSampler::GetMoreSamples(Sample *sample, RNG &rng) {
-    if (samplePos == 1) {
+    if (samplePos == nSamples) {
         if (xPixelStart == xPixelEnd || yPixelStart == yPixelEnd)
             return 0;
         if (++xPos == xPixelEnd) {
@@ -41,7 +43,7 @@ int PixelCentersSampler::GetMoreSamples(Sample *sample, RNG &rng) {
         if (yPos == yPixelEnd)
             return 0;
 
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < 3 * nSamples; ++i)
             lensSamples[i] = rng.RandomFloat();
         
         samplePos = 0;
@@ -49,8 +51,8 @@ int PixelCentersSampler::GetMoreSamples(Sample *sample, RNG &rng) {
     // Return next \mono{PixelCentersSampler} sample point
     sample->imageX = xPos + 0.5f;
     sample->imageY = yPos + 0.5f;
-    sample->lensU = lensSamples[0];
-    sample->lensV = lensSamples[1];
+    sample->lensU = lensSamples[2*samplePos + 0];
+    sample->lensV = lensSamples[2*samplePos + 1];
     sample->time = Lerp(timeSamples[samplePos], shutterOpen, shutterClose);
     // Generate stratified samples for integrators
     for (uint32_t i = 0; i < sample->n1D.size(); ++i)

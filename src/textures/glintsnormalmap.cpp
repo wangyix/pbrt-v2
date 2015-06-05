@@ -32,12 +32,12 @@ GlintsMapData* GlintsNormalTexture::GetTexture(const string& filename) {
         printf("Unable to open glints normal map file %s!\n", filename.c_str());
         exit(1);
     }
-    if (width != height || 
+    /*if (width != height || 
         (width & (width - 1)) != 0 || (height & (height - 1)) != 0) {
         printf("Glints normal map %s is %d x %d; dimensions must be equal and a power of 2!\n",
             filename.c_str(), width, height);
         exit(1);
-    }
+    }*/
 
     GlintsMapData* ret = new GlintsMapData(texels, width, height);
     delete[] texels;

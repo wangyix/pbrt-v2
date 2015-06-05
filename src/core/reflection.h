@@ -123,7 +123,10 @@ enum BxDFType {
     BSDF_ALL              = BSDF_ALL_REFLECTION |
                             BSDF_ALL_TRANSMISSION,
 
-    BSDF_GLINTS_ALL       = BSDF_ALL | BSDF_GLINTS
+    BSDF_GLINTS_OR_SPECULAR = BSDF_GLINTS |
+                              BSDF_SPECULAR |
+                              BSDF_REFLECTION |
+                              BSDF_TRANSMISSION
 };
 
 
@@ -531,7 +534,7 @@ public:
         ndfApproximation(approx),
         useApproximation(false)
     {
-        *(const_cast<BxDFType*>(&type)) = BxDFType(BSDF_REFLECTION | BSDF_GLOSSY | BSDF_GLINTS);
+        *(const_cast<BxDFType*>(&type)) = BxDFType(BSDF_GLINTS);
     }
 
     // for f, Sample_f, Pdf, set the distribution to the normalMapDIstribution or the 
