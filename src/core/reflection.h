@@ -199,6 +199,11 @@ private:
 #define MAX_BxDFS 8
     BxDF *bxdfs[MAX_BxDFS];
     friend class MixMaterial;
+
+public:
+    // dx, dy, scale only used if useApprox is false
+    static void SetGlintsMicrofacetBxDFsUseApprox(BSDF *bsdf, bool useApprox,
+        float dx = 0.0f, float dy = 0.0f, float scale = 1.0f);
 };
 
 

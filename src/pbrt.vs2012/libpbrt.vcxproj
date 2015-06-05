@@ -220,6 +220,7 @@
     <ClInclude Include="..\integrators\directlighting.h" />
     <ClInclude Include="..\integrators\emission.h" />
     <ClInclude Include="..\integrators\glintsdirectlighting.h" />
+    <ClInclude Include="..\integrators\glintspath.h" />
     <ClInclude Include="..\integrators\glossyprt.h" />
     <ClInclude Include="..\integrators\igi.h" />
     <ClInclude Include="..\integrators\irradiancecache.h" />
@@ -1187,6 +1188,7 @@
     <ClCompile Include="..\integrators\directlighting.cpp" />
     <ClCompile Include="..\integrators\emission.cpp" />
     <ClCompile Include="..\integrators\glintsdirectlighting.cpp" />
+    <ClCompile Include="..\integrators\glintspath.cpp" />
     <ClCompile Include="..\integrators\glossyprt.cpp" />
     <ClCompile Include="..\integrators\igi.cpp" />
     <ClCompile Include="..\integrators\irradiancecache.cpp" />

@@ -69,6 +69,7 @@
 #include "integrators/useprobes.h"
 #include "integrators/whitted.h"
 #include "integrators/glintsdirectlighting.h"
+#include "integrators/glintspath.h"
 #include "lights/diffuse.h"
 #include "lights/distant.h"
 #include "lights/goniometric.h"
@@ -1256,16 +1257,31 @@ Renderer *RenderOptions::MakeRenderer() const {
         RendererParams.ReportUnused();
     }
     else if (RendererName == "glints") {
-        PixelCentersSampler* pcSampler = CreatePixelCentersSampler(SamplerParams, camera->film, camera);
-        if (!pcSampler) Severe("Unable to create pixel centers sampler.");
-        GlintsDirectLightingIntegrator* gdlIntegrator = CreateGlintsDirectLightingIntegrator(SurfIntegratorParams);
-        if (!gdlIntegrator) Severe("Unable to create glints direct lighting integrator.");
-        VolumeIntegrator *volumeIntegrator = MakeVolumeIntegrator(VolIntegratorName,
+        /*PixelCentersSampler* sampler = CreatePixelCentersSampler(SamplerParams, camera->film, camera);
+        if (!sampler) Severe("Unable to create pixel centers sampler.");
+
+        GlintsDirectLightingIntegrator* surfaceIntegrator = CreateGlintsDirectLightingIntegrator(SurfIntegratorParams);
+        if (!surfaceIntegrator) Severe("Unable to create glints direct lighting integrator.");*/
+
+        Sampler* sampler = MakeSampler(SamplerName, SamplerParams, camera->film, camera);
+        if (!sampler) Severe("Unable to create sampler.");
+        
+        GlintsPathIntegrator* surfaceIntegrator = CreateGlintsPathSurfaceIntegrator(
+            SurfIntegratorParams, camera->film, sampler);
+        if (!surfaceIntegrator) Severe("Unable to create glints path integrator.");
+
+        VolumeIntegrator* volumeIntegrator = MakeVolumeIntegrator(VolIntegratorName,
             VolIntegratorParams);
         if (!volumeIntegrator) Severe("Unable to create volume integrator.");
-        //renderer = new GlintsDirectRenderer(sampler, camera, integrator, volumeIntegrator);
+        
         bool visIds = RendererParams.FindOneBool("visualizeobjectids", false);
-        renderer = new SamplerRenderer(pcSampler, camera, gdlIntegrator, volumeIntegrator, visIds);
+        
+        renderer = new SamplerRenderer(sampler, camera, surfaceIntegrator, volumeIntegrator, visIds);
+
+        // Warn if no light sources are defined
+        if (lights.size() == 0)
+            Warning("No light sources defined in scene; "
+            "possibly rendering a black image.");
 
         int numPointLights = 0;
         for (int i = 0; i < lights.size(); i++) {
@@ -1274,7 +1290,7 @@ Renderer *RenderOptions::MakeRenderer() const {
         }
         if (numPointLights == 0)
             Warning("No point light sources defined in scene; "
-                "possibly not rendering any glints.");
+            "possibly not rendering any glints.");
     }
     else {
         if (RendererName != "sampler")

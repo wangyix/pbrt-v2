@@ -653,4 +653,16 @@ Spectrum BSDF::rho(const Vector &wo, RNG &rng, BxDFType flags,
     return ret;
 }
 
-
+void BSDF::SetGlintsMicrofacetBxDFsUseApprox(BSDF *bsdf, bool useApprox,
+                                        float dx, float dy, float scale) {
+    for (int i = 0; i < bsdf->nBxDFs; i++) {
+        BxDF* bxdf = bsdf->bxdfs[i];
+        if (bxdf->MatchesFlags(BSDF_GLINTS)) {
+            GlintsMicrofacet* glintsBxdf = static_cast<GlintsMicrofacet*>(bxdf);
+            if (useApprox)
+                glintsBxdf->useApproximationDistribution();
+            else
+                glintsBxdf->useNormalMapDistribution(dx, dy, scale);
+        }
+    }
+}

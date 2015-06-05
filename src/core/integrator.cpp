@@ -41,7 +41,10 @@
 Integrator::~Integrator() {
 }
 
-
+// Used for GlintsDirectLightingIntegrator
+// GlintsMicrofacet approximation is not used;
+// footprint need not be corrected since sample differentials are expected to be
+// pixel-sized and centered (using PixelCenters sampler)
 Spectrum UniformSampleAllPointLightsFromGlintsMaterial(const Scene *scene,
     const Renderer *renderer, MemoryArena &arena, const Point &p,
     const Normal &n, const Vector &wo, float rayEpsilon,
@@ -50,6 +53,9 @@ Spectrum UniformSampleAllPointLightsFromGlintsMaterial(const Scene *scene,
     //const BSDFSampleOffsets *bsdfSampleOffsets
 
     Spectrum L(0.);
+
+    // approximation will not be used; footprint needs no modification
+    BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, false, 0.0f, 0.0f, 1.0f);
 
     for (uint32_t i = 0; i < scene->lights.size(); ++i) {
         Light *light = scene->lights[i];
@@ -155,9 +161,52 @@ Spectrum UniformSampleOneLight(const Scene *scene,
                        bsdfSample, BxDFType(BSDF_ALL & ~BSDF_SPECULAR));
 }
 
+// used in GlintsPathIntegrator in the case that a non-specular bounce
+// has occurred before in the path.
+// GlintsMicrofacet will use its approximation
+Spectrum UniformSampleOneLightGlints(const Scene *scene,
+    const Renderer *renderer, MemoryArena &arena, const Point &p,
+    const Normal &n, const Vector &wo, float rayEpsilon, float time,
+    BSDF *bsdf, const Sample *sample, RNG &rng, int lightNumOffset,
+    const LightSampleOffsets *lightSampleOffset,
+    const BSDFSampleOffsets *bsdfSampleOffset) {
+    // Randomly choose a single light to sample, _light_
+    int nLights = int(scene->lights.size());
+    if (nLights == 0) return Spectrum(0.);
+    int lightNum;
+    if (lightNumOffset != -1)
+        lightNum = Floor2Int(sample->oneD[lightNumOffset][0] * nLights);
+    else
+        lightNum = Floor2Int(rng.RandomFloat() * nLights);
+    lightNum = min(lightNum, nLights - 1);
+    Light *light = scene->lights[lightNum];
 
+    // Initialize light and bsdf samples for single light sample
+    LightSample lightSample;
+    BSDFSample bsdfSample;
+    if (lightSampleOffset != NULL && bsdfSampleOffset != NULL) {
+        lightSample = LightSample(sample, *lightSampleOffset, 0);
+        bsdfSample = BSDFSample(sample, *bsdfSampleOffset, 0);
+    } else {
+        lightSample = LightSample(rng);
+        bsdfSample = BSDFSample(rng);
+    }
+
+    // glints bxdfs will use approximation
+    BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, true);
+
+    return (float)nLights *
+        EstimateDirect(scene, renderer, arena, light, p, n, wo,
+        rayEpsilon, time, bsdf, rng, lightSample,
+        bsdfSample, BxDFType((BSDF_ALL | BSDF_GLINTS) & ~BSDF_SPECULAR));
+}
+
+// used in GlintsPathIntegrator in the case that all bounces in the path 
+// so far have been specular
+// GlintsMicrofacet will not use its approximation
 Spectrum UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
     bool glintsMaterial, bool nonPointLightsOnly,
+    float dxToPixelCenter, float dyToPixelCenter, float footprintScale,
     const Scene *scene,
     const Renderer *renderer, MemoryArena &arena, const Point &p,
     const Normal &n, const Vector &wo, float rayEpsilon, float time,
@@ -205,9 +254,16 @@ Spectrum UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
         bsdfSample = BSDFSample(rng);
     }
 
-    BxDFType flags = glintsMaterial ?
-        BxDFType(BSDF_GLINTS) :
-        BxDFType(BSDF_ALL & ~BSDF_SPECULAR);
+    BxDFType flags;
+    if (glintsMaterial) {
+        flags = BxDFType(BSDF_GLINTS);
+        // glint bxdfs will not use approximation
+        BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, false,
+            dxToPixelCenter, dyToPixelCenter, footprintScale);
+    } else {
+        flags = BxDFType(BSDF_ALL & ~BSDF_SPECULAR);
+        // no need to set glints bxdfs use approx: they will not be sampled
+    }
 
     return (float)nLights *
         EstimateDirect(scene, renderer, arena, light, p, n, wo,

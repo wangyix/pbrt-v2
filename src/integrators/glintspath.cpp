@@ -3,6 +3,8 @@
 #include "scene.h"
 #include "intersection.h"
 #include "paramset.h"
+#include "../core/film.h"
+#include "../core/sampler.h"
 
 // GlintsPathIntegrator Method Definitions
 void GlintsPathIntegrator::RequestSamples(Sampler *sampler, Sample *sample,
@@ -19,6 +21,19 @@ void GlintsPathIntegrator::RequestSamples(Sampler *sampler, Sample *sample,
 Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
     const RayDifferential &r, const Intersection &isect,
     const Sample *sample, RNG &rng, MemoryArena &arena) const {
+
+    // We need to exclude the paths handled by GlintsDirectLightingIntegrator, which are:
+    // E S* G Lp, where E=eye, S=specular, G=glints, Lp=pointlight.
+    bool nonSpecularBounceOccurred = false;
+    bool glintsMicrofacetDistributionUseApprox;
+
+    // calculate offset of the pixel center from the sample
+    float pixelLeft = min(Round2Int(sample->imageX), filmXResolution - 1);
+    float pixelTop = min(Round2Int(sample->imageY), filmYResolution - 1);
+    float dxToPixelCenter = pixelLeft + 0.5f - sample->imageX;
+    float dyToPixelCenter = pixelTop + 0.5f - sample->imageY;
+
+
     // Declare common path integration variables
     Spectrum pathThroughput = 1., L = 0.;
     RayDifferential ray(r);
@@ -35,16 +50,39 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         const Point &p = bsdf->dgShading.p;
         const Normal &n = bsdf->dgShading.nn;
         Vector wo = -ray.d;
-        if (bounces < SAMPLE_DEPTH)
+
+        const LightSampleOffsets* lightSampleOffset = NULL;
+        const BSDFSampleOffsets* bsdfSampleOffset = NULL;
+        if (bounces < SAMPLE_DEPTH) {
+            lightSampleOffset = &lightSampleOffsets[bounces];
+            bsdfSampleOffset = &bsdfSampleOffsets[bounces];
+        }
+
+        if (nonSpecularBounceOccurred) {
+            // approximation will be used for the glints bxdfs
             L += pathThroughput *
-            UniformSampleOneLight(scene, renderer, arena, p, n, wo,
-            isectp->rayEpsilon, ray.time, bsdf, sample, rng,
-            lightNumOffset[bounces], &lightSampleOffsets[bounces],
-            &bsdfSampleOffsets[bounces]);
-        else
+                UniformSampleOneLightGlints(scene, renderer, arena, p, n, wo,
+                isectp->rayEpsilon, ray.time, bsdf, sample, rng,
+                lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
+        } else {
+            // get E S* G Lnp paths, where Lnp = non-pointlight
+            // approximation will NOT be used for the glints bxdfs
             L += pathThroughput *
-            UniformSampleOneLight(scene, renderer, arena, p, n, wo,
-            isectp->rayEpsilon, ray.time, bsdf, sample, rng);
+                UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
+                true, true,
+                dxToPixelCenter, dyToPixelCenter, footprintScale,
+                scene, renderer, arena, p, n, wo,
+                isectp->rayEpsilon, ray.time, bsdf, sample, rng,
+                lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
+            // get E S* D L paths, where D = non-glint,(non-specular)
+            L += pathThroughput *
+                UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
+                false, false,
+                dxToPixelCenter, dyToPixelCenter, footprintScale,
+                scene, renderer, arena, p, n, wo,
+                isectp->rayEpsilon, ray.time, bsdf, sample, rng,
+                lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
+        }
 
         // Sample BSDF to get new path direction
 
@@ -85,14 +123,17 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         }
         pathThroughput *= renderer->Transmittance(scene, ray, NULL, rng, arena);
         isectp = &localIsect;
+
+        if (!specularBounce)
+            nonSpecularBounceOccurred = true;
     }
     return L;
 }
 
 
-GlintsPathIntegrator *CreateGlintsPathSurfaceIntegrator(const ParamSet &params) {
+GlintsPathIntegrator *CreateGlintsPathSurfaceIntegrator(const ParamSet &params,
+    Film* film, Sampler* sampler) {
     int maxDepth = params.FindOneInt("maxdepth", 5);
-    return new GlintsPathIntegrator(maxDepth);
+    return new GlintsPathIntegrator(maxDepth, film->xResolution, film->yResolution,
+        sampler->samplesPerPixel);
 }
-
-

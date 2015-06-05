@@ -42,12 +42,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class GlintsPathIntegrator : public SurfaceIntegrator {
 public:
-    // GlintsPathIntegrator Public Methods
+    GlintsPathIntegrator(int md, int xResolution, int yResolution, int pixelSamples) 
+    : filmXResolution(xResolution), filmYResolution(yResolution),
+    footprintScale(sqrtf(pixelSamples)) {
+        maxDepth = md;
+    }
     Spectrum Li(const Scene *scene, const Renderer *renderer,
         const RayDifferential &ray, const Intersection &isect,
         const Sample *sample, RNG &rng, MemoryArena &arena) const;
     void RequestSamples(Sampler *sampler, Sample *sample, const Scene *scene);
-    GlintsPathIntegrator(int md) { maxDepth = md; }
 private:
     int maxDepth;
 #define SAMPLE_DEPTH 3
@@ -55,9 +58,13 @@ private:
     int lightNumOffset[SAMPLE_DEPTH];
     BSDFSampleOffsets bsdfSampleOffsets[SAMPLE_DEPTH];
     BSDFSampleOffsets pathSampleOffsets[SAMPLE_DEPTH];
+
+    const int filmXResolution, filmYResolution;
+    const float footprintScale;
 };
 
 
-GlintsPathIntegrator *CreateGlintsPathSurfaceIntegrator(const ParamSet &params);
+GlintsPathIntegrator *CreateGlintsPathSurfaceIntegrator(const ParamSet &params,
+    Film* film, Sampler* sampler);
 
 #endif // PBRT_INTEGRATORS_GLINTSPATH_H
