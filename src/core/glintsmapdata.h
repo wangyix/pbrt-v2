@@ -6,7 +6,8 @@
 #define PBRT_TEXTURES_GLINTSMAPDATA_H
 
 #include "pbrt.h"
-#include "reflection.h"
+
+struct GlintsPixelFootprint;
 
 class GlintsMapData {
 public:

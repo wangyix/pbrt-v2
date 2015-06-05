@@ -14,7 +14,7 @@ GlintsMapData::~GlintsMapData() {
 
 // evaluates D(s,t) given s,t, pixel footprint, and roughness
 float GlintsMapData::D(float s, float t,
-    float u, float v, float du0, float dv0, float du1, float dv1,
+    const GlintsPixelFootprint& footprint,
     float roughness) const {
 
     // PLACEHOLDER: blinn distribution
@@ -23,3 +23,21 @@ float GlintsMapData::D(float s, float t,
     return (exponent + 2) * INV_TWOPI * powf(costhetah, exponent);
 }
 
+#include "rng.h"
+#include "montecarlo.h"
+
+void GlintsMapData::normalAt(float u, float v, float* s, float* t) const {
+    // PLACEHOLDER: sample the blinn distribution
+    float exponent = 10.0f;
+
+    RNG rng;
+    float u1 = rng.RandomFloat();
+    float u2 = rng.RandomFloat();
+    // Compute sampled half-angle vector $\wh$ for Blinn distribution
+    float costheta = powf(u1, 1.f / (exponent + 1));
+    float sintheta = sqrtf(max(0.f, 1.f - costheta*costheta));
+    float phi = u2 * 2.f * M_PI;
+    Vector wh = SphericalDirection(sintheta, costheta, phi);
+    *s = wh.x;
+    *t = wh.y;
+}

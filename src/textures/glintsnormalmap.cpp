@@ -12,6 +12,7 @@ GlintsNormalTexture::~GlintsNormalTexture() {
     delete mapping;
 }
 
+std::map<string, GlintsMapData*> GlintsNormalTexture::textures;
 
 // Unused
 Spectrum GlintsNormalTexture::Evaluate(const DifferentialGeometry &) const {
@@ -45,7 +46,7 @@ GlintsMapData* GlintsNormalTexture::GetTexture(const string& filename) {
     return ret;
 }
 
-GlintsNormalTexture* CreateImageFloatTexture(const Transform &tex2world,
+GlintsNormalTexture* CreateGlintsNormalTexture(const Transform &tex2world,
     const TextureParams &tp) {
     
     // Initialize 2D texture mapping

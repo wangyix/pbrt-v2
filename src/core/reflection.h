@@ -43,6 +43,7 @@
 #include "rng.h"
 #include "spectrum.h"
 #include "kdtree.h"
+#include "montecarlo.h"
 #include "glintsmapdata.h"
 
 // Reflection Declarations
@@ -436,48 +437,6 @@ struct GlintsPixelFootprint {
 };
 
 
-class GlintsMicrofacet : public Microfacet {
-public:
-    GlintsMicrofacet(const Spectrum &reflectance, Fresnel *f,
-        GlintsNormalMapDistribution *dist, MicrofacetDistribution* approx)
-        : Microfacet(reflectance, f, NULL),
-        normalMapDistribution(dist),
-        ndfApproximation(approx),
-        useApproximation(false)
-    {
-        *(const_cast<BxDFType*>(&type)) = BxDFType(BSDF_REFLECTION | BSDF_GLOSSY | BSDF_GLINTS);
-    }
-
-    // for f, Sample_f, Pdf, set the distribution to the normalMapDIstribution or the 
-    // approximatino before doing the calculations
-    Spectrum f(const Vector &wo, const Vector &wi) const {
-        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
-        return Microfacet::f(wo, wi);
-    }
-    Spectrum Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const {
-        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
-        return Microfacet::Sample_f(wo, wi, u1, u2, pdf);
-    }
-    float Pdf(const Vector &wo, const Vector &wi) const {
-        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
-        return Microfacet::Pdf(wo, wi);
-    }
-
-    // methods called by the integrator before sampling/evualating
-    void useApproximationDistribution() const {
-        useApproximation = true;
-    }
-    void useNormalMapDistribution(float dx, float dy, float scale) const {
-        useApproximation = false;
-        normalMapDistribution->setPixelFootprintFromSample(dx, dy, scale);
-    }
-private:
-    GlintsNormalMapDistribution* normalMapDistribution;
-    MicrofacetDistribution* ndfApproximation;
-    mutable bool useApproximation;
-};
-
-
 
 class GlintsNormalMapDistribution : public MicrofacetDistribution {
 public:
@@ -560,6 +519,51 @@ private:
     float roughness;                        // std of the gaussian used to convolve D(s,t) 
     const GlintsMapData* glintsMapData;
 };
+
+
+
+class GlintsMicrofacet : public Microfacet {
+public:
+    GlintsMicrofacet(const Spectrum &reflectance, Fresnel *f,
+        GlintsNormalMapDistribution *dist, MicrofacetDistribution* approx)
+        : Microfacet(reflectance, f, NULL),
+        normalMapDistribution(dist),
+        ndfApproximation(approx),
+        useApproximation(false)
+    {
+        *(const_cast<BxDFType*>(&type)) = BxDFType(BSDF_REFLECTION | BSDF_GLOSSY | BSDF_GLINTS);
+    }
+
+    // for f, Sample_f, Pdf, set the distribution to the normalMapDIstribution or the 
+    // approximatino before doing the calculations
+    Spectrum f(const Vector &wo, const Vector &wi) const {
+        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
+        return Microfacet::f(wo, wi);
+    }
+    Spectrum Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const {
+        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
+        return Microfacet::Sample_f(wo, wi, u1, u2, pdf);
+    }
+    float Pdf(const Vector &wo, const Vector &wi) const {
+        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
+        return Microfacet::Pdf(wo, wi);
+    }
+
+    // methods called by the integrator before sampling/evualating
+    void useApproximationDistribution() const {
+        useApproximation = true;
+    }
+    void useNormalMapDistribution(float dx, float dy, float scale) const {
+        useApproximation = false;
+        normalMapDistribution->setPixelFootprintFromSample(dx, dy, scale);
+    }
+private:
+    GlintsNormalMapDistribution* normalMapDistribution;
+    MicrofacetDistribution* ndfApproximation;
+    mutable bool useApproximation;
+};
+
+
 
 
 
