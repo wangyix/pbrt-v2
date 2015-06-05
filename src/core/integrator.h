@@ -87,6 +87,14 @@ Spectrum UniformSampleOneLight(const Scene *scene, const Renderer *renderer,
     const Sample *sample, RNG &rng, int lightNumOffset = -1,
     const LightSampleOffsets *lightSampleOffset = NULL,
     const BSDFSampleOffsets *bsdfSampleOffset = NULL);
+Spectrum UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
+    bool glintsMaterial, bool nonPointLightsOnly,
+    const Scene *scene, const Renderer *renderer,
+    MemoryArena &arena, const Point &p, const Normal &n, const Vector &wo,
+    float rayEpsilon, float time, BSDF *bsdf,
+    const Sample *sample, RNG &rng, int lightNumOffset = -1,
+    const LightSampleOffsets *lightSampleOffset = NULL,
+    const BSDFSampleOffsets *bsdfSampleOffset = NULL);
 Spectrum EstimateDirect(const Scene *scene, const Renderer *renderer,
     MemoryArena &arena, const Light *light, const Point &p,
     const Normal &n, const Vector &wo, float rayEpsilon, float time, const BSDF *bsdf,

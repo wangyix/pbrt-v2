@@ -156,6 +156,66 @@ Spectrum UniformSampleOneLight(const Scene *scene,
 }
 
 
+Spectrum UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
+    bool glintsMaterial, bool nonPointLightsOnly,
+    const Scene *scene,
+    const Renderer *renderer, MemoryArena &arena, const Point &p,
+    const Normal &n, const Vector &wo, float rayEpsilon, float time,
+    BSDF *bsdf, const Sample *sample, RNG &rng, int lightNumOffset,
+    const LightSampleOffsets *lightSampleOffset,
+    const BSDFSampleOffsets *bsdfSampleOffset) {
+
+    assert(glintsMaterial == nonPointLightsOnly);
+
+    // Randomly choose a single light to sample, _light_  
+    int nLights;
+    Light *light;
+    float u = (lightNumOffset != -1) ? sample->oneD[lightNumOffset][0] : rng.RandomFloat();
+    if (nonPointLightsOnly) {
+        nLights = 0;
+        for (int i = 0; i < scene->lights.size(); i++) {
+            if (!scene->lights[i]->isPointLight())
+                nLights++;
+        }
+        if (nLights == 0) return Spectrum(0.);
+        int lightNum = Floor2Int(u * nLights);
+        lightNum = min(lightNum, nLights - 1);
+        // find the lightNum-th non-pointlight
+        for (int i = 0, k = -1; k < lightNum; i++) {
+            light = scene->lights[i];
+            if (!light->isPointLight())
+                k++;
+        }
+    } else {
+        nLights = int(scene->lights.size());
+        if (nLights == 0) return Spectrum(0.);
+        int lightNum = Floor2Int(u * nLights);
+        lightNum = min(lightNum, nLights - 1);
+        light = scene->lights[lightNum];
+    }
+    
+    // Initialize light and bsdf samples for single light sample
+    LightSample lightSample;
+    BSDFSample bsdfSample;
+    if (lightSampleOffset != NULL && bsdfSampleOffset != NULL) {
+        lightSample = LightSample(sample, *lightSampleOffset, 0);
+        bsdfSample = BSDFSample(sample, *bsdfSampleOffset, 0);
+    } else {
+        lightSample = LightSample(rng);
+        bsdfSample = BSDFSample(rng);
+    }
+
+    BxDFType flags = glintsMaterial ?
+        BxDFType(BSDF_GLINTS) :
+        BxDFType(BSDF_ALL & ~BSDF_SPECULAR);
+
+    return (float)nLights *
+        EstimateDirect(scene, renderer, arena, light, p, n, wo,
+            rayEpsilon, time, bsdf, rng, lightSample,
+            bsdfSample, flags);
+}
+
+
 Spectrum EstimateDirect(const Scene *scene, const Renderer *renderer,
         MemoryArena &arena, const Light *light, const Point &p,
         const Normal &n, const Vector &wo, float rayEpsilon, float time,
