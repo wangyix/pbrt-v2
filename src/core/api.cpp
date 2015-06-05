@@ -68,6 +68,7 @@
 #include "integrators/single.h"
 #include "integrators/useprobes.h"
 #include "integrators/whitted.h"
+#include "integrators/glintsdirectlighting.h"
 #include "lights/diffuse.h"
 #include "lights/distant.h"
 #include "lights/goniometric.h"
@@ -94,12 +95,14 @@
 #include "renderers/metropolis.h"
 #include "renderers/samplerrenderer.h"
 #include "renderers/surfacepoints.h"
+#include "renderers/glintsdirectrenderer.h"
 #include "samplers/adaptive.h"
 #include "samplers/bestcandidate.h"
 #include "samplers/halton.h"
 #include "samplers/lowdiscrepancy.h"
 #include "samplers/random.h"
 #include "samplers/stratified.h"
+#include "samplers/pixelcenters.h"
 #include "shapes/cone.h"
 #include "shapes/cylinder.h"
 #include "shapes/disk.h"
@@ -1249,6 +1252,25 @@ Renderer *RenderOptions::MakeRenderer() const {
         Point pCamera = camera->CameraToWorld(camera->shutterOpen, Point(0, 0, 0));
         renderer = CreateSurfacePointsRenderer(RendererParams, pCamera, camera->shutterOpen);
         RendererParams.ReportUnused();
+    }
+    else if (RendererName == "glints") {
+        PixelCentersSampler* sampler = CreatePixelCentersSampler(SamplerParams, camera->film, camera);
+        if (!sampler) Severe("Unable to create pixel centers sampler.");
+        GlintsDirectLightingIntegrator* integrator = CreateGlintsDirectLightingIntegrator(SurfIntegratorParams);
+        if (!integrator) Severe("Unable to create glints direct lighting integrator.");
+        VolumeIntegrator *volumeIntegrator = MakeVolumeIntegrator(VolIntegratorName,
+            VolIntegratorParams);
+        if (!volumeIntegrator) Severe("Unable to create volume integrator.");
+        renderer = new GlintsDirectRenderer(sampler, camera, integrator, volumeIntegrator);
+
+        int numPointLights = 0;
+        for (int i = 0; i < lights.size(); i++) {
+            if (lights[i]->isPointLight())
+                numPointLights++;
+        }
+        if (numPointLights == 0)
+            Warning("No point light sources defined in scene; "
+                "possibly not rendering any glints.");
     }
     else {
         if (RendererName != "sampler")

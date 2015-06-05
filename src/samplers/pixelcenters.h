@@ -12,9 +12,9 @@
 class PixelCentersSampler : public Sampler {
 public:
     PixelCentersSampler(int xstart, int xend, int ystart,
-        int yend, int ns, float sopen, float sclose);
+        int yend, float sopen, float sclose);
     ~PixelCentersSampler() {
-        FreeAligned(imageSamples);
+        FreeAligned(lensSamples);
     }
     int MaximumSampleCount() { return 1; }
     int GetMoreSamples(Sample *sample, RNG &rng);
@@ -22,13 +22,13 @@ public:
     Sampler *GetSubSampler(int num, int count);
 private:
     // PixelCentersSampler Private Data
-    int xPos, yPos, nSamples;
-    float *imageSamples, *lensSamples, *timeSamples;
+    int xPos, yPos;
+    float *lensSamples, *timeSamples;
     int samplePos;
 };
 
 
-Sampler *CreatePixelCentersSampler(const ParamSet &params, const Film *film,
+PixelCentersSampler *CreatePixelCentersSampler(const ParamSet &params, const Film *film,
     const Camera *camera);
 
 #endif // PBRT_SAMPLERS_PIXELCENTERS_H

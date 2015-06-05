@@ -23,11 +23,6 @@ public:
     void RequestSamples(Sampler *sampler, Sample *sample, const Scene *scene);
 private:
     int maxDepth;
-
-    // Declare sample parameters for light source sampling
-    LightSampleOffsets *lightSampleOffsets;
-    BSDFSampleOffsets *bsdfSampleOffsets;
-    int lightNumOffset;
 };
 
 
