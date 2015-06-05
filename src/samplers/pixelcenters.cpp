@@ -3,7 +3,7 @@
 #include "montecarlo.h"
 #include "camera.h"
 
-#define nSamples 100
+#define nSamples 1
 
 PixelCentersSampler::PixelCentersSampler(int xstart, int xend,
     int ystart, int yend, float sopen, float sclose)
