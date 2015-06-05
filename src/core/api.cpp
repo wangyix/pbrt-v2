@@ -1256,14 +1256,16 @@ Renderer *RenderOptions::MakeRenderer() const {
         RendererParams.ReportUnused();
     }
     else if (RendererName == "glints") {
-        PixelCentersSampler* sampler = CreatePixelCentersSampler(SamplerParams, camera->film, camera);
-        if (!sampler) Severe("Unable to create pixel centers sampler.");
-        GlintsDirectLightingIntegrator* integrator = CreateGlintsDirectLightingIntegrator(SurfIntegratorParams);
-        if (!integrator) Severe("Unable to create glints direct lighting integrator.");
+        PixelCentersSampler* pcSampler = CreatePixelCentersSampler(SamplerParams, camera->film, camera);
+        if (!pcSampler) Severe("Unable to create pixel centers sampler.");
+        GlintsDirectLightingIntegrator* gdlIntegrator = CreateGlintsDirectLightingIntegrator(SurfIntegratorParams);
+        if (!gdlIntegrator) Severe("Unable to create glints direct lighting integrator.");
         VolumeIntegrator *volumeIntegrator = MakeVolumeIntegrator(VolIntegratorName,
             VolIntegratorParams);
         if (!volumeIntegrator) Severe("Unable to create volume integrator.");
-        renderer = new GlintsDirectRenderer(sampler, camera, integrator, volumeIntegrator);
+        //renderer = new GlintsDirectRenderer(sampler, camera, integrator, volumeIntegrator);
+        bool visIds = RendererParams.FindOneBool("visualizeobjectids", false);
+        renderer = new SamplerRenderer(pcSampler, camera, gdlIntegrator, volumeIntegrator, visIds);
 
         int numPointLights = 0;
         for (int i = 0; i < lights.size(); i++) {

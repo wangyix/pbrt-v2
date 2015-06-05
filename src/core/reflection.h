@@ -528,42 +528,25 @@ private:
 class GlintsMicrofacet : public Microfacet {
 public:
     GlintsMicrofacet(const Spectrum &reflectance, Fresnel *f,
-        GlintsNormalMapDistribution *dist, MicrofacetDistribution* approx)
-        : Microfacet(reflectance, f, NULL),
-        normalMapDistribution(dist),
-        ndfApproximation(approx),
-        useApproximation(false)
+        GlintsNormalMapDistribution *md, MicrofacetDistribution* mdApprox)
+        : Microfacet(reflectance, f, md),   // initially uses the GlintsNormalMapDistribution
+        normalMapDistribution(md),
+        ndfApproximation(mdApprox)
     {
         *(const_cast<BxDFType*>(&type)) = BxDFType(BSDF_GLINTS);
     }
 
-    // for f, Sample_f, Pdf, set the distribution to the normalMapDIstribution or the 
-    // approximatino before doing the calculations
-    Spectrum f(const Vector &wo, const Vector &wi) const {
-        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
-        return Microfacet::f(wo, wi);
-    }
-    Spectrum Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const {
-        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
-        return Microfacet::Sample_f(wo, wi, u1, u2, pdf);
-    }
-    float Pdf(const Vector &wo, const Vector &wi) const {
-        distribution = useApproximation ? ndfApproximation : normalMapDistribution;
-        return Microfacet::Pdf(wo, wi);
-    }
-
     // methods called by the integrator before sampling/evualating
     void useApproximationDistribution() const {
-        useApproximation = true;
+        distribution = ndfApproximation;
     }
     void useNormalMapDistribution(float dx, float dy, float scale) const {
-        useApproximation = false;
         normalMapDistribution->setPixelFootprintFromSample(dx, dy, scale);
+        distribution = normalMapDistribution;
     }
 private:
     GlintsNormalMapDistribution* normalMapDistribution;
     MicrofacetDistribution* ndfApproximation;
-    mutable bool useApproximation;
 };
 
 
