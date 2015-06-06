@@ -252,7 +252,8 @@
     <ClInclude Include="..\materials\uber.h" />
     <ClInclude Include="..\renderers\aggregatetest.h" />
     <ClInclude Include="..\renderers\createprobes.h" />
-    <ClInclude Include="..\renderers\glintsdirectrenderer.h" />
+    <ClInclude Include="..\renderers\glintspassrenderer.h" />
+    <ClInclude Include="..\renderers\glintsrenderer.h" />
     <ClInclude Include="..\renderers\metropolis.h" />
     <ClInclude Include="..\renderers\samplerrenderer.h" />
     <ClInclude Include="..\renderers\surfacepoints.h" />
@@ -1220,7 +1221,8 @@
     <ClCompile Include="..\materials\uber.cpp" />
     <ClCompile Include="..\renderers\aggregatetest.cpp" />
     <ClCompile Include="..\renderers\createprobes.cpp" />
-    <ClCompile Include="..\renderers\glintsdirectrenderer.cpp" />
+    <ClCompile Include="..\renderers\glintspassrenderer.cpp" />
+    <ClCompile Include="..\renderers\glintsrenderer.cpp" />
     <ClCompile Include="..\renderers\metropolis.cpp" />
     <ClCompile Include="..\renderers\samplerrenderer.cpp" />
     <ClCompile Include="..\renderers\surfacepoints.cpp" />

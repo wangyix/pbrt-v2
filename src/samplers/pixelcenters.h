@@ -28,7 +28,7 @@ private:
 };
 
 
-PixelCentersSampler *CreatePixelCentersSampler(const ParamSet &params, const Film *film,
+PixelCentersSampler *CreatePixelCentersSampler(const Film *film,
     const Camera *camera);
 
 #endif // PBRT_SAMPLERS_PIXELCENTERS_H

@@ -96,7 +96,8 @@
 #include "renderers/metropolis.h"
 #include "renderers/samplerrenderer.h"
 #include "renderers/surfacepoints.h"
-#include "renderers/glintsdirectrenderer.h"
+#include "renderers/glintspassrenderer.h"
+#include "renderers/glintsrenderer.h"
 #include "samplers/adaptive.h"
 #include "samplers/bestcandidate.h"
 #include "samplers/halton.h"
@@ -644,7 +645,7 @@ Sampler *MakeSampler(const string &name,
     else if (name == "stratified")
         sampler = CreateStratifiedSampler(paramSet, film, camera);
     else if (name == "pixelcenters")
-        sampler = CreatePixelCentersSampler(paramSet, film, camera);
+        sampler = CreatePixelCentersSampler(film, camera);
     else
         Warning("Sampler \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
@@ -1257,26 +1258,15 @@ Renderer *RenderOptions::MakeRenderer() const {
         RendererParams.ReportUnused();
     }
     else if (RendererName == "glints") {
-        /*PixelCentersSampler* sampler = CreatePixelCentersSampler(SamplerParams, camera->film, camera);
-        if (!sampler) Severe("Unable to create pixel centers sampler.");
-
-        GlintsDirectLightingIntegrator* surfaceIntegrator = CreateGlintsDirectLightingIntegrator(SurfIntegratorParams);
-        if (!surfaceIntegrator) Severe("Unable to create glints direct lighting integrator.");*/
-
-        Sampler* sampler = MakeSampler(SamplerName, SamplerParams, camera->film, camera);
-        if (!sampler) Severe("Unable to create sampler.");
-        
-        GlintsPathIntegrator* surfaceIntegrator = CreateGlintsPathSurfaceIntegrator(
-            SurfIntegratorParams, camera->film, sampler);
-        if (!surfaceIntegrator) Severe("Unable to create glints path integrator.");
+        Sampler* pathSampler = MakeSampler(SamplerName, SamplerParams, camera->film, camera);
+        if (!pathSampler) Severe("Unable to create sampler.");
 
         VolumeIntegrator* volumeIntegrator = MakeVolumeIntegrator(VolIntegratorName,
             VolIntegratorParams);
         if (!volumeIntegrator) Severe("Unable to create volume integrator.");
-        
-        bool visIds = RendererParams.FindOneBool("visualizeobjectids", false);
-        
-        renderer = new SamplerRenderer(sampler, camera, surfaceIntegrator, volumeIntegrator, visIds);
+
+        renderer = new GlintsRenderer(pathSampler, camera, volumeIntegrator,
+            SurfIntegratorParams);
 
         // Warn if no light sources are defined
         if (lights.size() == 0)

@@ -67,8 +67,7 @@ int PixelCentersSampler::GetMoreSamples(Sample *sample, RNG &rng) {
 
 
 
-PixelCentersSampler *CreatePixelCentersSampler(const ParamSet &params,
-    const Film *film, const Camera *camera) {
+PixelCentersSampler *CreatePixelCentersSampler(const Film *film, const Camera *camera) {
     int xstart, xend, ystart, yend;
     film->GetSampleExtent(&xstart, &xend, &ystart, &yend);
     return new PixelCentersSampler(xstart, xend, ystart, yend,

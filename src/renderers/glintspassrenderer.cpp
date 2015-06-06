@@ -1,6 +1,6 @@
-// renderers/glintsdirectrenderer.cpp*
+// renderers/glintspassrenderer.cpp*
 #include "stdafx.h"
-#include "renderers/glintsdirectrenderer.h"
+#include "renderers/glintspassrenderer.h"
 #include "scene.h"
 #include "film.h"
 #include "volume.h"
@@ -11,10 +11,10 @@
 #include "intersection.h"
 
 
-// GlintsDirectRendererTask Definitions
-void GlintsDirectRendererTask::Run() {
+// GlintsPassRendererTask Definitions
+void GlintsPassRendererTask::Run() {
     PBRT_STARTED_RENDERTASK(taskNum);
-    // Get sub-_Sampler_ for _GlintsDirectRendererTask_
+    // Get sub-_Sampler_ for _GlintsPassRendererTask_
     Sampler *sampler = mainSampler->GetSubSampler(taskNum, taskCount);
     if (!sampler)
     {
@@ -79,7 +79,10 @@ void GlintsDirectRendererTask::Run() {
             for (int i = 0; i < sampleCount; ++i)
             {
                 PBRT_STARTED_ADDING_IMAGE_SAMPLE(&samples[i], &rays[i], &Ls[i], &Ts[i]);
-                camera->film->AddSample(samples[i], Ls[i]);
+                if (splatSamples)
+                    camera->film->Splat(samples[i], Ls[i]);
+                else
+                    camera->film->AddSample(samples[i], Ls[i]);
                 PBRT_FINISHED_ADDING_IMAGE_SAMPLE();
             }
         }
@@ -88,7 +91,7 @@ void GlintsDirectRendererTask::Run() {
         arena.FreeAll();
     }
 
-    // Clean up after _GlintsDirectRendererTask_ is done with its image region
+    // Clean up after _GlintsPassRendererTask_ is done with its image region
     camera->film->UpdateDisplay(sampler->xPixelStart,
         sampler->yPixelStart, sampler->xPixelEnd + 1, sampler->yPixelEnd + 1);
     delete sampler;
@@ -103,48 +106,54 @@ void GlintsDirectRendererTask::Run() {
 
 
 
-// GlintsDirectRenderer Method Definitions
-GlintsDirectRenderer::GlintsDirectRenderer(PixelCentersSampler *s, Camera *c,
-    GlintsDirectLightingIntegrator *integrator, VolumeIntegrator *vi) {
+// GlintsPassRenderer Method Definitions
+GlintsPassRenderer::GlintsPassRenderer(Sampler *s, Camera *c,
+    SurfaceIntegrator *si, VolumeIntegrator *vi, bool splat, string prString) 
+    : splatSamples(splat)
+{
     sampler = s;
     camera = c;
-    glintsDirectIntegrator = integrator;
+    surfaceIntegrator = si;
     volumeIntegrator = vi;
+    reporterString = prString;
 }
 
 
-GlintsDirectRenderer::~GlintsDirectRenderer() {
+GlintsPassRenderer::~GlintsPassRenderer() {
+    /*// parent GlintsRenderer will do this
     delete sampler;
     delete camera;
-    delete glintsDirectIntegrator;
+    delete surfaceIntegrator;
     delete volumeIntegrator;
+    */
 }
 
 
-void GlintsDirectRenderer::Render(const Scene *scene) {
+void GlintsPassRenderer::Render(const Scene *scene) {
     PBRT_FINISHED_PARSING();
     // Allow integrators to do preprocessing for the scene
     PBRT_STARTED_PREPROCESSING();
-    glintsDirectIntegrator->Preprocess(scene, camera, this);
+    surfaceIntegrator->Preprocess(scene, camera, this);
     volumeIntegrator->Preprocess(scene, camera, this);
     PBRT_FINISHED_PREPROCESSING();
     PBRT_STARTED_RENDERING();
     // Allocate and initialize _sample_
-    Sample *sample = new Sample(sampler, glintsDirectIntegrator,
+    Sample *sample = new Sample(sampler, surfaceIntegrator,
         volumeIntegrator, scene);
 
-    // Create and launch _GlintsDirectRendererTask_s for rendering image
+    // Create and launch _GlintsPassRendererTask_s for rendering image
 
-    // Compute number of _GlintsDirectRendererTask_s to create for rendering
+    // Compute number of _GlintsPassRendererTask_s to create for rendering
     int nPixels = camera->film->xResolution * camera->film->yResolution;
     int nTasks = max(32 * NumSystemCores(), nPixels / (16 * 16));
     nTasks = RoundUpPow2(nTasks);
-    ProgressReporter reporter(nTasks, "Rendering glints direct lighting");
+    ProgressReporter reporter(nTasks, reporterString);
     vector<Task *> renderTasks;
     for (int i = 0; i < nTasks; ++i)
-        renderTasks.push_back(new GlintsDirectRendererTask(scene, this, camera,
+        renderTasks.push_back(new GlintsPassRendererTask(scene, this, camera,
             reporter, sampler, sample,
-            nTasks - 1 - i, nTasks));
+            nTasks - 1 - i, nTasks,
+            splatSamples));
     EnqueueTasks(renderTasks);
     WaitForAllTasks();
     for (uint32_t i = 0; i < renderTasks.size(); ++i)
@@ -153,11 +162,11 @@ void GlintsDirectRenderer::Render(const Scene *scene) {
     PBRT_FINISHED_RENDERING();
     // Clean up after rendering and store final image
     delete sample;
-    camera->film->WriteImage();
+    //camera->film->WriteImage();
 }
 
 
-Spectrum GlintsDirectRenderer::Li(const Scene *scene,
+Spectrum GlintsPassRenderer::Li(const Scene *scene,
     const RayDifferential &ray, const Sample *sample, RNG &rng,
     MemoryArena &arena, Intersection *isect, Spectrum *T) const {
     Assert(ray.time == sample->time);
@@ -169,7 +178,7 @@ Spectrum GlintsDirectRenderer::Li(const Scene *scene,
     if (!isect) isect = &localIsect;
     Spectrum Li = 0.f;
     if (scene->Intersect(ray, isect))
-        Li = glintsDirectIntegrator->Li(scene, this, ray, *isect, sample,
+        Li = surfaceIntegrator->Li(scene, this, ray, *isect, sample,
         rng, arena);
     else {
         // Handle ray that doesn't intersect any geometry
@@ -182,7 +191,7 @@ Spectrum GlintsDirectRenderer::Li(const Scene *scene,
 }
 
 
-Spectrum GlintsDirectRenderer::Transmittance(const Scene *scene,
+Spectrum GlintsPassRenderer::Transmittance(const Scene *scene,
     const RayDifferential &ray, const Sample *sample, RNG &rng,
     MemoryArena &arena) const {
     return volumeIntegrator->Transmittance(scene, this, ray, sample,
