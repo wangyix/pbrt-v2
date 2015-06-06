@@ -15,7 +15,8 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
     volIntegrator = vi;
 
     // direct lighting renderer will splat its samples.  This works since we're only using
-    // one sample per pixel
+    // one sample per pixel, which means this sample contribution does not need to be weighted
+    // and can simply be added to the film pixel.
     directSampler = CreatePixelCentersSampler(camera->film, camera);
     if (!directSampler) Severe("Unable to create pixel centers sampler.");
 
