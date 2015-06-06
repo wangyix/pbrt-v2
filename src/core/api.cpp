@@ -1261,12 +1261,15 @@ Renderer *RenderOptions::MakeRenderer() const {
         Sampler* pathSampler = MakeSampler(SamplerName, SamplerParams, camera->film, camera);
         if (!pathSampler) Severe("Unable to create sampler.");
 
-        VolumeIntegrator* volumeIntegrator = MakeVolumeIntegrator(VolIntegratorName,
+        VolumeIntegrator* directVolIntegrator = MakeVolumeIntegrator(VolIntegratorName,
             VolIntegratorParams);
-        if (!volumeIntegrator) Severe("Unable to create volume integrator.");
+        if (!directVolIntegrator) Severe("Unable to create glints direct lighting volume integrator.");
+        VolumeIntegrator* pathVolIntegrator = MakeVolumeIntegrator(VolIntegratorName,
+            VolIntegratorParams);
+        if (!pathVolIntegrator) Severe("Unable to create glints path volume integrator.");
 
-        renderer = new GlintsRenderer(pathSampler, camera, volumeIntegrator,
-            SurfIntegratorParams);
+        renderer = new GlintsRenderer(pathSampler, camera, directVolIntegrator,
+            pathVolIntegrator, SurfIntegratorParams);
 
         // Warn if no light sources are defined
         if (lights.size() == 0)

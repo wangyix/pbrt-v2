@@ -14,8 +14,8 @@
 
 class GlintsRenderer : public Renderer {
 public:
-    GlintsRenderer(Sampler* pathSampler, Camera* c, VolumeIntegrator* vi,
-        const ParamSet& siParams);
+    GlintsRenderer(Sampler* pathSampler, Camera* c, VolumeIntegrator* directVi,
+        VolumeIntegrator* pathVi, const ParamSet& siParams);
     ~GlintsRenderer();
     void Render(const Scene *scene);
 
@@ -30,9 +30,10 @@ private:
     Camera* camera;
     Sampler* directSampler;
     SurfaceIntegrator* directSurfIntegrator;
+    VolumeIntegrator* directVolIntegrator;
     Sampler* pathSampler;
     SurfaceIntegrator* pathSurfIntegrator;
-    VolumeIntegrator* volIntegrator;
+    VolumeIntegrator* pathVolIntegrator;
     
     GlintsPassRenderer* firstRenderer;
     GlintsPassRenderer* secondRenderer;

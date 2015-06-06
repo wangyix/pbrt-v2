@@ -9,10 +9,10 @@
 
 // GlintsRenderer Method Definitions
 GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
-    VolumeIntegrator* vi, const ParamSet& siParams) {
+    VolumeIntegrator* directVi, VolumeIntegrator* pathVi, const ParamSet& siParams) {
     
     camera = c;
-    volIntegrator = vi;
+    
 
     // direct lighting renderer will splat its samples.  This works since we're only using
     // one sample per pixel, which means this sample contribution does not need to be weighted
@@ -23,7 +23,9 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
     directSurfIntegrator = CreateGlintsDirectLightingIntegrator(siParams);
     if (!directSurfIntegrator) Severe("Unable to create glints direct lighting integrator.");
 
-    firstRenderer = new GlintsPassRenderer(directSampler, camera, directSurfIntegrator, volIntegrator,
+    directVolIntegrator = directVi;
+
+    firstRenderer = new GlintsPassRenderer(directSampler, camera, directSurfIntegrator, directVolIntegrator,
         true, "Rendering glints direct lighting");
 
 
@@ -32,7 +34,9 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
     pathSurfIntegrator = CreateGlintsPathSurfaceIntegrator(siParams, camera->film, pathSampler);
     if (!pathSurfIntegrator) Severe("Unable to create glints path integrator.");
 
-    secondRenderer = new GlintsPassRenderer(pathSampler, camera, pathSurfIntegrator, volIntegrator,
+    pathVolIntegrator = pathVi;
+
+    secondRenderer = new GlintsPassRenderer(pathSampler, camera, pathSurfIntegrator, pathVolIntegrator,
         false, "Rendering all other paths");
 }
 
@@ -40,9 +44,10 @@ GlintsRenderer::~GlintsRenderer() {
     delete camera;
     delete directSampler;
     delete directSurfIntegrator;
+    delete directVolIntegrator;
     delete pathSampler;
     delete pathSurfIntegrator;
-    delete volIntegrator;
+    delete pathVolIntegrator;
 
     delete firstRenderer;
     delete secondRenderer;
