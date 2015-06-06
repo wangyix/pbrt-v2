@@ -54,8 +54,9 @@ GlintsRenderer::~GlintsRenderer() {
 }
 
 void GlintsRenderer::Render(const Scene *scene) {
-    firstRenderer->Render(scene);
     secondRenderer->Render(scene);
+    firstRenderer->Render(scene);
+    //secondRenderer->Render(scene);
     camera->film->WriteImage();
 }
 

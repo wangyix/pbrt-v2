@@ -392,10 +392,10 @@ void GlintsNormalMapDistribution::Sample_f(const Vector &wo, Vector *wi,
     glintsMapData->normalAt(sampleFootprint.u, sampleFootprint.v, &s, &t);
     // perturb using roughness
     // UNCOMMENT THIS AFTER BLINN PLACEHOLDER IS REMOVED!!!!!!!!!
-    /*float ds, dt;
+    float ds, dt;
     SampleDiskGaussian(u1, u2, &ds, &dt);
     s += (roughness * ds);
-    t += (roughness * dt);*/
+    t += (roughness * dt);
     // check if this normal (s,t) falls within unit disk
     float z_sq = 1.0f - s*s - t*t;
     if (z_sq < 0.0f) {
