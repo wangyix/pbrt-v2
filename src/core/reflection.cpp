@@ -343,6 +343,122 @@ float Microfacet::Pdf(const Vector &wo, const Vector &wi) const {
 }
 
 
+
+
+bool GlintsPixelFootprint::operator==(const GlintsPixelFootprint& fp) const {
+    return (u == fp.u && v == fp.v
+        && dudx == fp.dudx && dvdx == fp.dvdx
+        && dudy == fp.dudy && dvdy == fp.dvdy);
+}
+bool GlintsPixelFootprint::isValid() const {
+    return (!isnan(u) && !isnan(v) && !isnan(dudx) && !isnan(dvdx) && !isnan(dudy) && !isnan(dvdy)
+        && (dudx != 0.0f || dvdx != 0.0f) && (dudy != 0.0f || dvdy != 0.0f));
+}
+
+
+bool GlintsDstParams::matches(float ss, float tt, const GlintsPixelFootprint& fp) const {
+#define ST_EPSILON 0.0001f 
+    if (!(footprint == fp))
+        return false;
+    return (abs(s - ss) <= ST_EPSILON && abs(t - tt) <= ST_EPSILON);
+}
+void GlintsDstParams::setTo(float ss, float tt, const GlintsPixelFootprint& fp) {
+    s = ss;
+    t = tt;
+    footprint = fp;
+}
+
+
+
+float GlintsNormalMapDistribution::D(const Vector &wh) const {
+    float s, t;
+    if (wh.z < 0.0f) {
+        s = -wh.x;
+        t = -wh.y;
+    } else {
+        s = wh.x;
+        t = wh.y;
+    }
+    float D_st = DstCached(s, t, pixelFootprint);
+
+    // we want to calculate D_w = cos(theta) * D_st
+    return wh.z * D_st;
+}
+
+void GlintsNormalMapDistribution::Sample_f(const Vector &wo, Vector *wi,
+                                        float u1, float u2, float *pdf) const {
+    // sample normal map at where the ray hit
+    float s, t;
+    glintsMapData->normalAt(sampleFootprint.u, sampleFootprint.v, &s, &t);
+    // perturb using roughness
+    // UNCOMMENT THIS AFTER BLINN PLACEHOLDER IS REMOVED!!!!!!!!!
+    /*float ds, dt;
+    SampleDiskGaussian(u1, u2, &ds, &dt);
+    s += (roughness * ds);
+    t += (roughness * dt);*/
+    // check if this normal (s,t) falls within unit disk
+    float z_sq = 1.0f - s*s - t*t;
+    if (z_sq < 0.0f) {
+        *pdf = 0.f;
+        return;
+    }
+    Vector wh(s, t, sqrtf(z_sq));
+    if (!SameHemisphere(wo, wh)) wh = -wh;
+    // check if wo is on the wrong side of this facet
+    if (Dot(wo, wh) <= 0.f) {
+        *pdf = 0.f;
+        return;
+    }
+    // compute wi by reflecting wo across wh
+    *wi = -wo + 2.f * Dot(wo, wh) * wh;
+    // evaluate pdf
+    float D_st = DstCached(s, t, pixelFootprint);
+    *pdf = wh.z * D_st / (4.f * Dot(wo, wh));   // wh.z is AbsCosTheta(wh)
+
+    // cache D_st for future use
+
+}
+
+float GlintsNormalMapDistribution::Pdf(const Vector &wo, const Vector &wi) const {
+    Vector wh = Normalize(wo + wi);
+    if (!SameHemisphere(wo, wh)) wh = -wh;
+    // check if wo is on the wrong side of this facet
+    if (Dot(wo, wh) <= 0.f) {
+        return 0.f;
+    }
+    // evaluate pdf
+    float D_st = DstCached(wh.x, wh.y, pixelFootprint);
+    return AbsCosTheta(wh) * D_st / (4.f * Dot(wo, wh));
+}
+
+void GlintsNormalMapDistribution::setPixelFootprintFromSample(float dx, float dy, float scale) const {
+    // scale footprint to pixel size
+    pixelFootprint.dudx = scale * sampleFootprint.dudx;
+    pixelFootprint.dvdx = scale * sampleFootprint.dvdx;
+    pixelFootprint.dudy = scale * sampleFootprint.dudy;
+    pixelFootprint.dvdy = scale * sampleFootprint.dvdy;
+    // move center to pixel center
+    pixelFootprint.u = sampleFootprint.u - pixelFootprint.dudx * dx - pixelFootprint.dudy * dy;
+    pixelFootprint.v = sampleFootprint.v - pixelFootprint.dvdx * dx - pixelFootprint.dvdy * dy;
+}
+
+
+float GlintsNormalMapDistribution::DstCached(float s, float t, const GlintsPixelFootprint& footprint) const {
+    static int hits = 0;
+    if (dstCacheEntry.matches(s, t, footprint)) {
+        hits++;
+        return dstCacheData;
+    }
+    dstCacheEntry.setTo(s, t, footprint);
+    dstCacheData = glintsMapData->D(s, t, footprint, roughness);
+    return dstCacheData;
+}
+
+
+
+
+
+
 void Blinn::Sample_f(const Vector &wo, Vector *wi, float u1, float u2,
                      float *pdf) const {
     // Compute sampled half-angle vector $\wh$ for Blinn distribution

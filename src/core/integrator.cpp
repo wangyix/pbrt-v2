@@ -344,7 +344,7 @@ Spectrum SpecularReflect(const RayDifferential &ray, BSDF *bsdf,
     Spectrum L = 0.f;
     if (pdf > 0.f && !f.IsBlack() && AbsDot(wi, n) != 0.f) {
         // Compute ray differential _rd_ for specular reflection
-        RayDifferential rd(p, wi, ray, isect.rayEpsilon);
+        /*RayDifferential rd(p, wi, ray, isect.rayEpsilon);
         if (ray.hasDifferentials) {
             rd.hasDifferentials = true;
             rd.rxOrigin = p + isect.dg.dpdx;
@@ -361,13 +361,75 @@ Spectrum SpecularReflect(const RayDifferential &ray, BSDF *bsdf,
                                                      dDNdx * n);
             rd.ryDirection = wi - dwody + 2 * Vector(Dot(wo, n) * dndy +
                                                      dDNdy * n);
-        }
+        }*/
+        RayDifferential rd = SpecularReflectRayDifferential(ray, bsdf, wi, isect);
+
         PBRT_STARTED_SPECULAR_REFLECTION_RAY(const_cast<RayDifferential *>(&rd));
         Spectrum Li = renderer->Li(scene, rd, sample, rng, arena);
         L = f * Li * AbsDot(wi, n) / pdf;
         PBRT_FINISHED_SPECULAR_REFLECTION_RAY(const_cast<RayDifferential *>(&rd));
     }
     return L;
+}
+
+RayDifferential SpecularReflectRayDifferential(const RayDifferential& ray,
+            const BSDF* bsdf, const Vector& wi, const Intersection& isect) {
+    const Point &p = bsdf->dgShading.p;
+    const Normal &n = bsdf->dgShading.nn;
+    Vector wo = -ray.d;
+    RayDifferential rd(p, wi, ray, isect.rayEpsilon);
+
+    if (ray.hasDifferentials) {
+        rd.hasDifferentials = true;
+        rd.rxOrigin = p + isect.dg.dpdx;
+        rd.ryOrigin = p + isect.dg.dpdy;
+        // Compute differential reflected directions
+        Normal dndx = bsdf->dgShading.dndu * bsdf->dgShading.dudx +
+            bsdf->dgShading.dndv * bsdf->dgShading.dvdx;
+        Normal dndy = bsdf->dgShading.dndu * bsdf->dgShading.dudy +
+            bsdf->dgShading.dndv * bsdf->dgShading.dvdy;
+        Vector dwodx = -ray.rxDirection - wo, dwody = -ray.ryDirection - wo;
+        float dDNdx = Dot(dwodx, n) + Dot(wo, dndx);
+        float dDNdy = Dot(dwody, n) + Dot(wo, dndy);
+        rd.rxDirection = wi - dwodx + 2 * Vector(Dot(wo, n) * dndx +
+            dDNdx * n);
+        rd.ryDirection = wi - dwody + 2 * Vector(Dot(wo, n) * dndy +
+            dDNdy * n);
+    }
+    return rd;
+}
+
+RayDifferential SpecularTransmitRayDifferential(const RayDifferential& ray,
+            const BSDF* bsdf, const Vector& wi, const Intersection& isect) {
+    const Point &p = bsdf->dgShading.p;
+    const Normal &n = bsdf->dgShading.nn;
+    Vector wo = -ray.d;
+    RayDifferential rd(p, wi, ray, isect.rayEpsilon);
+    
+    if (ray.hasDifferentials) {
+        rd.hasDifferentials = true;
+        rd.rxOrigin = p + isect.dg.dpdx;
+        rd.ryOrigin = p + isect.dg.dpdy;
+
+        float eta = bsdf->eta;
+        Vector w = -wo;
+        if (Dot(wo, n) < 0) eta = 1.f / eta;
+
+        Normal dndx = bsdf->dgShading.dndu * bsdf->dgShading.dudx + bsdf->dgShading.dndv * bsdf->dgShading.dvdx;
+        Normal dndy = bsdf->dgShading.dndu * bsdf->dgShading.dudy + bsdf->dgShading.dndv * bsdf->dgShading.dvdy;
+
+        Vector dwodx = -ray.rxDirection - wo, dwody = -ray.ryDirection - wo;
+        float dDNdx = Dot(dwodx, n) + Dot(wo, dndx);
+        float dDNdy = Dot(dwody, n) + Dot(wo, dndy);
+
+        float mu = eta * Dot(w, n) - Dot(wi, n);
+        float dmudx = (eta - (eta*eta*Dot(w, n)) / Dot(wi, n)) * dDNdx;
+        float dmudy = (eta - (eta*eta*Dot(w, n)) / Dot(wi, n)) * dDNdy;
+
+        rd.rxDirection = wi + eta * dwodx - Vector(mu * dndx + dmudx * n);
+        rd.ryDirection = wi + eta * dwody - Vector(mu * dndy + dmudy * n);
+    }
+    return rd;
 }
 
 
@@ -383,7 +445,7 @@ Spectrum SpecularTransmit(const RayDifferential &ray, BSDF *bsdf,
     Spectrum L = 0.f;
     if (pdf > 0.f && !f.IsBlack() && AbsDot(wi, n) != 0.f) {
         // Compute ray differential _rd_ for specular transmission
-        RayDifferential rd(p, wi, ray, isect.rayEpsilon);
+        /*RayDifferential rd(p, wi, ray, isect.rayEpsilon);
         if (ray.hasDifferentials) {
             rd.hasDifferentials = true;
             rd.rxOrigin = p + isect.dg.dpdx;
@@ -406,7 +468,9 @@ Spectrum SpecularTransmit(const RayDifferential &ray, BSDF *bsdf,
         
             rd.rxDirection = wi + eta * dwodx - Vector(mu * dndx + dmudx * n);
             rd.ryDirection = wi + eta * dwody - Vector(mu * dndy + dmudy * n);
-        }
+        }*/
+        RayDifferential rd = SpecularTransmitRayDifferential(ray, bsdf, wi, isect);
+
         PBRT_STARTED_SPECULAR_REFRACTION_RAY(const_cast<RayDifferential *>(&rd));
         Spectrum Li = renderer->Li(scene, rd, sample, rng, arena);
         L = f * Li * AbsDot(wi, n) / pdf;

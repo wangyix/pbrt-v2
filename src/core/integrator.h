@@ -110,6 +110,10 @@ Spectrum EstimateDirect(const Scene *scene, const Renderer *renderer,
 Spectrum SpecularReflect(const RayDifferential &ray, BSDF *bsdf, RNG &rng,
     const Intersection &isect, const Renderer *renderer, const Scene *scene,
     const Sample *sample, MemoryArena &arena);
+RayDifferential SpecularReflectRayDifferential(const RayDifferential& ray,
+    const BSDF* bsdf, const Vector& wi, const Intersection& isect);
+RayDifferential SpecularTransmitRayDifferential(const RayDifferential& ray,
+    const BSDF* bsdf, const Vector& wi, const Intersection& isect);
 Spectrum SpecularTransmit(const RayDifferential &ray, BSDF *bsdf, RNG &rng,
     const Intersection &isect, const Renderer *renderer, const Scene *scene,
     const Sample *sample, MemoryArena &arena);

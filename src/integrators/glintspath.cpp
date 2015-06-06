@@ -109,7 +109,7 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
             break;
         specularBounce = (flags & BSDF_SPECULAR) != 0;
         pathThroughput *= f * AbsDot(wi, n) / pdf;
-        ray = RayDifferential(p, wi, ray, isectp->rayEpsilon);
+        //ray = RayDifferential(p, wi, ray, isectp->rayEpsilon);
 
         // Possibly terminate the path
         if (bounces > 3) {
@@ -120,6 +120,20 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         }
         if (bounces == maxDepth)
             break;
+
+        // Compute next ray; Compute ray differential if this bounce is specular
+        if (!nonSpecularBounceOccurred && specularBounce) {
+            assert(ray.hasDifferentials);
+            if (flags & BSDF_REFLECTION) {
+                ray = SpecularReflectRayDifferential(ray, bsdf, wi, isect);
+            } else if (flags & BSDF_TRANSMISSION) {
+                ray = SpecularTransmitRayDifferential(ray, bsdf, wi, isect);
+            } else {
+                assert(false);  // a specular bsdf should be reflection or transmission
+            }
+        } else {
+            ray = RayDifferential(p, wi, ray, isectp->rayEpsilon);
+        }
 
         // Find next vertex of path
         if (!scene->Intersect(ray, &localIsect)) {

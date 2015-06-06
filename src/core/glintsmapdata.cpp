@@ -1,4 +1,5 @@
 #include "glintsmapdata.h"
+#include "reflection.h"
 
 GlintsMapData::GlintsMapData(const RGBSpectrum* texels, int w, int h) {
     width = w;
@@ -13,9 +14,10 @@ GlintsMapData::~GlintsMapData() {
 }
 
 // evaluates D(s,t) given s,t, pixel footprint, and roughness
-float GlintsMapData::D(float s, float t,
-    const GlintsPixelFootprint& footprint,
-    float roughness) const {
+float GlintsMapData::D(float s, float t, const GlintsPixelFootprint& footprint,
+                        float roughness) const {
+
+    assert(footprint.isValid());
 
     // PLACEHOLDER: blinn distribution
     float exponent = 1.0f / roughness;

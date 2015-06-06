@@ -440,11 +440,20 @@ struct GlintsPixelFootprint {
         : u(0.0f), v(0.0f), dudx(0.0f), dvdx(0.0f), dudy(0.0f), dvdy(0.0f) {}
     GlintsPixelFootprint(float uu, float vv, float duudx, float dvvdx, float duudy, float dvvdy)
         : u(uu), v(vv), dudx(duudx), dvdx(dvvdx), dudy(duudy), dvdy(dvvdy) {}
+    bool operator==(const GlintsPixelFootprint& fp) const;
+    bool isValid() const;
 
     float u, v, dudx, dvdx, dudy, dvdy;
 };
 
 
+struct GlintsDstParams {
+    GlintsPixelFootprint footprint;
+    bool matches(float ss, float tt, const GlintsPixelFootprint& fp) const;
+    void setTo(float ss, float tt, const GlintsPixelFootprint& fp);
+
+    float s, t;
+};
 
 class GlintsNormalMapDistribution : public MicrofacetDistribution {
 public:
@@ -455,79 +464,23 @@ public:
         roughness(rough),
         glintsMapData(mapData) {}
 
-    float D(const Vector &wh) const {
-        float s, t;
-        if (wh.z < 0.0f) {
-            s = -wh.x;
-            t = -wh.y;
-        } else {
-            s = wh.x;
-            t = wh.y;
-        }
-        float D_st = glintsMapData->D(s, t, pixelFootprint, roughness);
+    float D(const Vector &wh) const;
+    void Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const;
+    float Pdf(const Vector &wo, const Vector &wi) const;
 
-        // we want to calculate D_w = cos(theta) * D_st
-        return wh.z * D_st;
-    }
-
-    void Sample_f(const Vector &wo, Vector *wi, float u1, float u2, float *pdf) const {
-        // sample normal map at where the ray hit
-        float s, t;
-        glintsMapData->normalAt(sampleFootprint.u, sampleFootprint.v, &s, &t);
-        // perturb using roughness
-// UNCOMMENT THIS AFTER BLINN PLACEHOLDER IS REMOVED!!!!!!!!!
-        /*float ds, dt;
-        SampleDiskGaussian(u1, u2, &ds, &dt);
-        s += (roughness * ds);
-        t += (roughness * dt);*/
-        // check if this normal (s,t) falls within unit disk
-        float z_sq = 1.0f - s*s - t*t;
-        if (z_sq < 0.0f) {
-            *pdf = 0.f;
-            return;
-        }
-        Vector wh(s, t, sqrtf(z_sq));
-        if (!SameHemisphere(wo, wh)) wh = -wh;
-        // check if wo is on the wrong side of this facet
-        if (Dot(wo, wh) <= 0.f) {
-            *pdf = 0.f;
-            return;
-        }
-        // compute wi by reflecting wo across wh
-        *wi = -wo + 2.f * Dot(wo, wh) * wh;
-        // evaluate pdf
-        float D_st = glintsMapData->D(s, t, pixelFootprint, roughness);
-        *pdf = wh.z * D_st / (4.f * Dot(wo, wh));   // wh.z is AbsCosTheta(wh)
-    }
-
-    float Pdf(const Vector &wo, const Vector &wi) const {
-        Vector wh = Normalize(wo + wi);
-        if (!SameHemisphere(wo, wh)) wh = -wh;
-        // check if wo is on the wrong side of this facet
-        if (Dot(wo, wh) <= 0.f) {
-            return 0.f;
-        }
-        // evaluate pdf
-        float D_st = glintsMapData->D(wh.x, wh.y, pixelFootprint, roughness);
-        return AbsCosTheta(wh) * D_st / (4.f * Dot(wo, wh));
-    }
-
-    void setPixelFootprintFromSample(float dx, float dy, float scale) const {
-        // scale footprint to pixel size??????????
-        pixelFootprint.dudx = scale * sampleFootprint.dudx;
-        pixelFootprint.dvdx = scale * sampleFootprint.dvdx;
-        pixelFootprint.dudy = scale * sampleFootprint.dudy;
-        pixelFootprint.dvdy = scale * sampleFootprint.dvdy;
-        // move center to pixel center
-        pixelFootprint.u = sampleFootprint.u - pixelFootprint.dudx * dx - pixelFootprint.dudy * dy;
-        pixelFootprint.v = sampleFootprint.v - pixelFootprint.dvdx * dx - pixelFootprint.dvdy * dy;
-    }
+    void setPixelFootprintFromSample(float dx, float dy, float scale) const;
 
 private:
-    GlintsPixelFootprint sampleFootprint;         // footprint of the sample
-    mutable GlintsPixelFootprint pixelFootprint; // footprint of the pixel of the sample
-    float roughness;                        // std of the gaussian used to convolve D(s,t) 
+    float DstCached(float s, float t, const GlintsPixelFootprint& footprint) const;
+
+    const GlintsPixelFootprint sampleFootprint;     // footprint of the sample
+    mutable GlintsPixelFootprint pixelFootprint;    // footprint of the pixel of the sample
+    const float roughness;                          // std of the gaussian used to convolve D(s,t) 
     const GlintsMapData* glintsMapData;
+
+    // cache of last computed value of D_st
+    mutable GlintsDstParams dstCacheEntry;
+    mutable float dstCacheData;
 };
 
 
