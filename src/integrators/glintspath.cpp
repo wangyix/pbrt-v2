@@ -93,11 +93,18 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
             0);
         else
             outgoingBSDFSample = BSDFSample(rng);
+
+        // set glints bxdfs to use or not use approximation distribution based on if the
+        // path has been all specular bounces so far or not.
+        // If yes, do not use approximation.
+        BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, nonSpecularBounceOccurred,
+            dxToPixelCenter, dyToPixelCenter, footprintScale);
+
         Vector wi;
         float pdf;
         BxDFType flags;
         Spectrum f = bsdf->Sample_f(wo, &wi, outgoingBSDFSample, &pdf,
-            BSDF_ALL, &flags);
+            BxDFType(BSDF_ALL | BSDF_GLINTS), &flags);
         if (f.IsBlack() || pdf == 0.)
             break;
         specularBounce = (flags & BSDF_SPECULAR) != 0;

@@ -19,7 +19,10 @@ float GlintsMapData::D(float s, float t,
 
     // PLACEHOLDER: blinn distribution
     float exponent = 1.0f / roughness;
-    float costhetah = sqrtf(max(1.0f - s*s - t*t, 0.0f));
+    float z_sq = 1.0f - s*s - t*t;
+    if (z_sq <= 0.0f)
+        return 0.0f;
+    float costhetah = sqrtf(z_sq);
     float D_w = (exponent + 2) * INV_TWOPI * powf(costhetah, exponent);
     return D_w / costhetah;    // convert to D_st
 }
@@ -29,9 +32,9 @@ float GlintsMapData::D(float s, float t,
 
 void GlintsMapData::normalAt(float u, float v, float* s, float* t) const {
     // PLACEHOLDER: sample the blinn distribution
-    float exponent = 10.0f;
+    float exponent = 1000.0f;
 
-    RNG rng;
+    static RNG rng;
     float u1 = rng.RandomFloat();
     float u2 = rng.RandomFloat();
     // Compute sampled half-angle vector $\wh$ for Blinn distribution

@@ -465,6 +465,7 @@ public:
             t = wh.y;
         }
         float D_st = glintsMapData->D(s, t, pixelFootprint, roughness);
+
         // we want to calculate D_w = cos(theta) * D_st
         return wh.z * D_st;
     }
@@ -474,10 +475,11 @@ public:
         float s, t;
         glintsMapData->normalAt(sampleFootprint.u, sampleFootprint.v, &s, &t);
         // perturb using roughness
-        float ds, dt;
+// UNCOMMENT THIS AFTER BLINN PLACEHOLDER IS REMOVED!!!!!!!!!
+        /*float ds, dt;
         SampleDiskGaussian(u1, u2, &ds, &dt);
         s += (roughness * ds);
-        t += (roughness * dt);
+        t += (roughness * dt);*/
         // check if this normal (s,t) falls within unit disk
         float z_sq = 1.0f - s*s - t*t;
         if (z_sq < 0.0f) {
@@ -495,7 +497,7 @@ public:
         *wi = -wo + 2.f * Dot(wo, wh) * wh;
         // evaluate pdf
         float D_st = glintsMapData->D(s, t, pixelFootprint, roughness);
-        *pdf = z_sq * D_st / (4.f * Dot(wo, wh));   // z_sq is AbsCosTheta(wh)
+        *pdf = wh.z * D_st / (4.f * Dot(wo, wh));   // wh.z is AbsCosTheta(wh)
     }
 
     float Pdf(const Vector &wo, const Vector &wi) const {
