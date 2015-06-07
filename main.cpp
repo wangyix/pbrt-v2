@@ -76,10 +76,12 @@ struct Linear {
     }
     // becomes inverse of linear function
     void invert() {
+        assert(a != 0.0);
         b = -b / a;
         a = 1.0 / a;
     }
     Linear inverse() const {
+        assert(a != 0.0);
         return Linear(1.0 / a, -b / a);
     }
     float a, b;
@@ -94,16 +96,13 @@ struct Quadratic {
     }
     // changes to a quadratic in terms of y
     // given y = dx + de
-    void changeVar(const Linear& sub) {
-        substitute(sub.inverse());
+    Quadratic changeVar(const Linear& sub) const {
+        return substitute(sub.inverse());
     }
     // replaces x with dx + e
-    void substitute(const Linear& sub) {
+    Quadratic substitute(const Linear& sub) const {
         float d = sub.a, e = sub.b;
-        float new_a = a*d*d;
-        float new_b = (2 * a*e + b) * d;
-        float new_c = (a*e + b)*e + c;
-        a = new_a, b = new_b, c = new_c;
+        return Quadratic(a*d*d, (2*a*e + b) * d, (a*e + b)*e + c);
     }
     // computes c,d,e so that (cx+d)^2+e = ax^2+bx+c
     // expects a to be positive
@@ -196,8 +195,7 @@ float integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
 
     // rewrite integral in terms of y:
     // exp(-y^2-r)*yQuad(y)*1/y.a dy = exp(-r)/y.a * exp(-y^2)*yQuad(y)
-    Quadratic yQuad = quad;
-    yQuad.changeVar(y);
+    Quadratic yQuad = quad.changeVar(y);
     float scale = exp(-r) / y.a; // take constants outside
     float y0 = y(x0), y1 = y(x1);
 
@@ -235,17 +233,37 @@ float integral_expquad_erfx(const Quadratic& expQuad, float x0, float x1) {
 }
 
 
+// integral of exp(-quad(x))erf(linear(x))
+float integral_expquad_erflin(const Quadratic& expQuad, const Linear& erfLin,
+                            float x0, float x1) {
+    Linear y = erfLin;
+    // rewrite integral in terms of y
+    // exp(-quad(y))*erf(y)*1/y.a
+    Quadratic yExpQuad = expQuad.changeVar(y);
+    float scale = 1 / y.a;
+    float y0 = y(x0), y1 = y(x1);
+
+    return scale * integral_expquad_erfx(yExpQuad, y0, y1);
+}
+
+
+
+
+
 int main(void) {
 
     Quadratic expQuad(1.2, -0.5, -0.3);
     Quadratic quad(0.9, 2.3, 8);
-    float x0 = 3.1, x1 = 6;
+    float x0 = -2, x1 = 3;
 
-    printf("%f\n", integral_expx2_quad(quad, x0, x1));
+    //printf("%f\n", integral_expx2_quad(quad, x0, x1));
 
-    printf("%f\n", integral_expquad_quad(expQuad, quad, x0, x1));
+    //printf("%f\n", integral_expquad_quad(expQuad, quad, x0, x1));
 
     printf("%f\n", integral_expquad_erfx(expQuad, x0, x1));
+
+    Linear erfLin(-1.8, -1.0);
+    printf("%f\n", integral_expquad_erflin(expQuad, erfLin, x0, x1));
 
     return 0;
 }
