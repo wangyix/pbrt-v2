@@ -10,15 +10,15 @@
 #define SQRT_PI    1.7724538509055159f
 
 
-#define ERF_HI_ACCR_INTERVALS 16
-#define ERF_LO_ACCR_INTERVALS 6
+//#define ERF_HI_ACCR_INTERVALS 16
+//#define ERF_HI_ACCR_INTERVAL_WIDTH (6.0f / ERF_HI_ACCR_INTERVALS)
 
-#define ERF_HI_ACCR_INTERVAL_WIDTH (6.0f / ERF_HI_ACCR_INTERVALS)
+#define ERF_LO_ACCR_INTERVALS 6
 #define ERF_LO_ACCR_INTERVAL_WIDTH (6.0f / ERF_LO_ACCR_INTERVALS)
 
 using namespace std;
 
-float erfQuadCoeffsHiAccr[ERF_HI_ACCR_INTERVALS][3] = {
+/*float erfQuadCoeffsHiAccr[ERF_HI_ACCR_INTERVALS][3] = {
     { 0.0012538983019272697, 0.0075419385860549483, -0.98863717846218213 },
     { 0.0076089715720849991, 0.040446645348687131, -0.94605274996245303 },
     { 0.034135618362908619, 0.15826869439552815, -0.81524428898560519 },
@@ -35,7 +35,7 @@ float erfQuadCoeffsHiAccr[ERF_HI_ACCR_INTERVALS][3] = {
     { -0.034135618362910694, 0.15826869439553715, 0.81524428898559553 },
     { -0.0076089715720859038, 0.040446645348691364, 0.94605274996244815 },
     { -0.0012538983019352364, 0.0075419385860994274, 0.98863717846212007 }
-};
+};*/
 
 float erfQuadCoeffsLoAccr[ERF_LO_ACCR_INTERVALS][3] = {
     { 0.0077718428863119277, 0.043514858915608634, -0.9393799187329831 },
@@ -45,6 +45,10 @@ float erfQuadCoeffsLoAccr[ERF_LO_ACCR_INTERVALS][3] = {
     { -0.18837446996390733, 0.71774488196095954, 0.31333038095266313 },
     { -0.0077718428863113058, 0.04351485891560556, 0.93937991873298676 }
 };
+
+
+
+
 
 /*float erf(float x) {
     if (x <= -3.0)
@@ -61,35 +65,7 @@ float erfQuadCoeffsLoAccr[ERF_LO_ACCR_INTERVALS][3] = {
         return (a*x + b)*x + c;
     }
 }*/
-/*float erfLoAccr(float x) {
-    if (x <= -3.0)
-        return -1.0;
-    else if (x >= 3.0)
-        return 1.0;
-    else {
-        // find which interval x belongs to
-        int i = floor((x + 3.0) / 6.0 * ERF_LO_ACCR_INTERVALS);
-        assert(i >= 0 && i < ERF_LO_ACCR_INTERVALS);
-        float a = erfQuadCoeffsLoAccr[i][0];
-        float b = erfQuadCoeffsLoAccr[i][1];
-        float c = erfQuadCoeffsLoAccr[i][2];
-        return (a*x + b)*x + c;
-    }
-}*/
 
-// integral of exp(-x^2)
-float integral_expx2(float x0, float x1) {
-    return 0.5 * SQRT_PI * (erf(x1) - erf(x0));
-}
-// inegral of exp(-x^2)*x
-float integral_expx2_x(float x0, float x1) {
-    return 0.5 * (exp(-x0*x0) - exp(-x1*x1));
-}
-// integral of exp(-x^2)*x^2
-float integral_expx2_x2(float x0, float x1) {
-    return 0.25 * (SQRT_PI * (erf(x1) - erf(x0)))
-        + 0.5 * (exp(-x0*x0)*x0 - exp(-x1*x1)*x1);
-}
 
 
 struct Linear {
@@ -125,7 +101,7 @@ struct Quadratic {
     void substitute(const Linear& sub) {
         float d = sub.a, e = sub.b;
         float new_a = a*d*d;
-        float new_b = (2*a*e + b) * d;
+        float new_b = (2 * a*e + b) * d;
         float new_c = (a*e + b)*e + c;
         a = new_a, b = new_b, c = new_c;
     }
@@ -139,6 +115,63 @@ struct Quadratic {
     }
     float a, b, c;
 };
+
+
+
+int getErfIntervalIndex(float x) {
+    if (x <= -3.0f)
+        return -1;
+    else if (x >= 3.0f)
+        return ERF_LO_ACCR_INTERVALS;
+    else {
+        int i = floor((x + 3.0) / 6.0 * ERF_LO_ACCR_INTERVALS);
+        assert(i >= 0 && i < ERF_LO_ACCR_INTERVALS);
+        return i;
+    }
+}
+
+// gets the quadratic approximation in interval i of erf function
+Quadratic getErfIntervalApprox(int i, float* xfrom, float* xto) {
+    if (i < 0) {
+        *xfrom = -INFINITY;
+        *xto = -3.0f;
+        return Quadratic(0.0f, 0.0f, -1.0f);
+    } else if (i >= ERF_LO_ACCR_INTERVALS) {
+        *xfrom = 3.0f;
+        *xto = INFINITY;
+        return Quadratic(0.0f, 0.0f, 1.0f);
+    } else {
+        *xfrom = -3.0 + i * ERF_LO_ACCR_INTERVAL_WIDTH;
+        *xto = *xfrom + ERF_LO_ACCR_INTERVAL_WIDTH;
+        return Quadratic(erfQuadCoeffsLoAccr[i][0],
+            erfQuadCoeffsLoAccr[i][1],
+            erfQuadCoeffsLoAccr[i][2]);
+    }
+}
+
+
+
+
+
+
+
+
+// integral of exp(-x^2)
+float integral_expx2(float x0, float x1) {
+    return 0.5 * SQRT_PI * (erf(x1) - erf(x0));
+}
+// inegral of exp(-x^2)*x
+float integral_expx2_x(float x0, float x1) {
+    return 0.5 * (exp(-x0*x0) - exp(-x1*x1));
+}
+// integral of exp(-x^2)*x^2
+float integral_expx2_x2(float x0, float x1) {
+    return 0.25 * (SQRT_PI * (erf(x1) - erf(x0)))
+        + 0.5 * (exp(-x0*x0)*x0 - exp(-x1*x1)*x1);
+}
+
+
+
 
 
 
@@ -165,28 +198,54 @@ float integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
     // exp(-y^2-r)*yQuad(y)*1/y.a dy = exp(-r)/y.a * exp(-y^2)*yQuad(y)
     Quadratic yQuad = quad;
     yQuad.changeVar(y);
-
-    Quadratic expyQuad = expQuad;
-    expyQuad.changeVar(y);
-
     float scale = exp(-r) / y.a; // take constants outside
     float y0 = y(x0), y1 = y(x1);
 
     return scale * integral_expx2_quad(yQuad, y0, y1);
 }
 
+// integral of exp(-quad(x))erf(x)
+float integral_expquad_erfx(const Quadratic& expQuad, float x0, float x1) {
+    bool boundsFlipped = false;
+    if (x0 > x1) {
+        float temp = x0;
+        x0 = x1;
+        x1 = temp;
+        boundsFlipped = true;
+    }
+    int i = getErfIntervalIndex(x0);
+    float xfrom, xto;
+    float sum = 0.0f;
+    Quadratic intervalApprox;
+    while (true) {
+        intervalApprox = getErfIntervalApprox(i, &xfrom, &xto);
+        if (xto >= x1)
+            break;
+        // integrate from where we are now to the end of this interval
+        sum += integral_expquad_quad(expQuad, intervalApprox, x0, xto);
+        x0 = xto;
+        i++;
+    }
+    // integrate remainder of range
+    sum += integral_expquad_quad(expQuad, intervalApprox, x0, x1);
 
+    if (boundsFlipped)
+        sum = -sum;
+    return sum;
+}
 
 
 int main(void) {
 
     Quadratic expQuad(1.2, -0.5, -0.3);
     Quadratic quad(0.9, 2.3, 8);
-    float x0 = -0.1, x1 = 1.2;
+    float x0 = 3.1, x1 = 6;
 
     printf("%f\n", integral_expx2_quad(quad, x0, x1));
 
     printf("%f\n", integral_expquad_quad(expQuad, quad, x0, x1));
+
+    printf("%f\n", integral_expquad_erfx(expQuad, x0, x1));
 
     return 0;
 }
