@@ -27,3 +27,6 @@ src/pbrt.vs*/*.user
 tmp/
 bin/
 lib/
+
+# Eigen
+Eigen/

@@ -176,6 +176,7 @@
     <ClInclude Include="..\core\floatfile.h" />
     <ClInclude Include="..\core\geometry.h" />
     <ClInclude Include="..\core\glintsmapdata.h" />
+    <ClInclude Include="..\core\glintsmath.h" />
     <ClInclude Include="..\core\imageio.h" />
     <ClInclude Include="..\core\targa.h" />
     <ClInclude Include="..\core\integrator.h" />
@@ -1118,6 +1119,7 @@
     <ClCompile Include="..\core\floatfile.cpp" />
     <ClCompile Include="..\core\geometry.cpp" />
     <ClCompile Include="..\core\glintsmapdata.cpp" />
+    <ClCompile Include="..\core\glintsmath.cpp" />
     <ClCompile Include="..\core\imageio.cpp" />
     <ClCompile Include="..\core\StdAfx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

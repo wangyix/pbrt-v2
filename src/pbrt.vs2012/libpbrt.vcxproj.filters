@@ -936,6 +936,9 @@
     <ClInclude Include="..\renderers\glintsrenderer.h">
       <Filter>Header Files\renderers</Filter>
     </ClInclude>
+    <ClInclude Include="..\core\glintsmath.h">
+      <Filter>Header Files\core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\3rdparty\ilmbase-1.0.2\half.cpp">
@@ -1729,6 +1732,9 @@
     </ClCompile>
     <ClCompile Include="..\renderers\glintsrenderer.cpp">
       <Filter>Source Files\renderers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\core\glintsmath.cpp">
+      <Filter>Source Files\core</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
