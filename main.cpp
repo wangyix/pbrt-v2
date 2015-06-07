@@ -70,9 +70,28 @@ float erfQuadCoeffsLoAccr[ERF_LO_ACCR_INTERVALS][3] = {
 
 struct Linear {
     Linear() : a(0.0), b(0.0) {}
+    Linear(float bb) : a(0.0), b(bb) {}
     Linear(float aa, float bb) : a(aa), b(bb) {}
     float operator()(float x) const {
         return a*x + b;
+    }
+    Linear operator+(float c) const {
+        return Linear(a, b + c);
+    }
+    Linear operator+(const Linear& l) const {
+        return Linear(a + l.a, b + l.b);
+    }
+    Linear operator-(float c) const {
+        return Linear(a, b - c);
+    }
+    Linear operator-() const {
+        return Linear(-a, -b);
+    }
+    Linear operator*(float c) const {
+        return Linear(a*c, b*c);
+    }
+    Linear operator/(float c) const {
+        return Linear(a / c, b / c);
     }
     // becomes inverse of linear function
     void invert() {
@@ -86,6 +105,12 @@ struct Linear {
     }
     float a, b;
 };
+Linear operator*(float c, const Linear& l) {
+    return Linear(c*l.a, c*l.b);
+}
+Linear operator+(float c, const Linear& l) {
+    return Linear(l.a, c + l.b);
+}
 
 
 struct Quadratic {
@@ -96,12 +121,13 @@ struct Quadratic {
     }
     // changes to a quadratic in terms of y
     // given y = dx + de
-    Quadratic changeVar(const Linear& sub) const {
-        return substitute(sub.inverse());
+    Quadratic changeVar(const Linear& y, float* dydx) const {
+        *dydx = y.a;
+        return substitute(y.inverse());
     }
     // replaces x with dx + e
-    Quadratic substitute(const Linear& sub) const {
-        float d = sub.a, e = sub.b;
+    Quadratic substitute(const Linear& f) const {
+        float d = f.a, e = f.b;
         return Quadratic(a*d*d, (2*a*e + b) * d, (a*e + b)*e + c);
     }
     // computes c,d,e so that (cx+d)^2+e = ax^2+bx+c
@@ -112,8 +138,80 @@ struct Quadratic {
         sq->b = 0.5 * b / sqrt(a);
         *remainder = c - 0.25 * b * b / a;
     }
+    Quadratic operator*(float s) const {
+        return Quadratic(a*s, b*s, c*s);
+    }
+    Quadratic operator/(float s) const {
+        return Quadratic(a / s, b / s, c / s);
+    }
     float a, b, c;
 };
+
+Quadratic operator*(const Linear& l1, const Linear& l2) {
+    return Quadratic(l1.a*l2.a, l1.a*l2.b + l1.b*l2.a, l1.b*l2.b);
+}
+
+Quadratic operator-(const Linear& l1, const Quadratic& l2) {
+    return Quadratic(-l2.a, l1.a - l2.b, l1.b - l2.c);
+}
+
+
+
+
+// represents ax + by + c
+struct LinearL {
+    LinearL() : a(0.0), b() {}
+    LinearL(float aa, const Linear& bb) : a(aa), b(bb) {}
+    Linear operator()(float x) const {
+        return a*x + b;
+    }
+    // becomes inverse of linear function
+    void invert() {
+        assert(a != 0.0);
+        b = -b / a;
+        a = 1.0 / a;
+    }
+    LinearL inverse() const {
+        assert(a != 0.0);
+        return LinearL(1.0 / a, -b / a);
+    }
+    float a;
+    Linear b;
+};
+
+// represents ax^2 + byx + cx + dy + e
+struct QuadraticL {
+    QuadraticL() : a(0.0), b(), c(0.0) {}
+    QuadraticL(float aa, const Linear& bb, const Linear& cc) : a(aa), b(bb), c(cc) {}
+    QuadraticL(float cxx, float cxy, float cx, float cy, float cc)
+        : a(cxx), b(cxy, cx), c(cy, cc) {}
+    Linear operator()(float x) const {
+        return (a*x + b)*x + c;
+    }
+    // changes to a quadratic in terms of y
+    // given y = dx + de
+    QuadraticL changeVar(const LinearL& y, float* dydx) const {
+        *dydx = y.a;
+        return substitute(y.inverse());
+    }
+    // replaces x with dx + e
+    QuadraticL substitute(const LinearL& f) const {
+        float d = f.a;
+        const Linear& e = f.b;
+        return QuadraticL(a*d*d, (2*a*e + b) * d, (a*e + b)*e + c);
+    }
+    // computes c,d,e so that (cx+d)^2+e = ax^2+bx+c
+    // expects a to be positive
+    void completeTheSquare(LinearL* sq, Quadratic* remainder) const {
+        assert(a > 0.0);
+        sq->a = sqrt(a);
+        sq->b = 0.5 * b / sqrt(a);
+        *remainder = c - 0.25 * b * b / a;
+    }
+    float a;
+    Linear b, c;
+};
+
 
 
 
@@ -195,8 +293,9 @@ float integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
 
     // rewrite integral in terms of y:
     // exp(-y^2-r)*yQuad(y)*1/y.a dy = exp(-r)/y.a * exp(-y^2)*yQuad(y)
-    Quadratic yQuad = quad.changeVar(y);
-    float scale = exp(-r) / y.a; // take constants outside
+    float dydx;
+    Quadratic yQuad = quad.changeVar(y, &dydx);
+    float scale = exp(-r) / dydx; // take constants outside
     float y0 = y(x0), y1 = y(x1);
 
     return scale * integral_expx2_quad(yQuad, y0, y1);
@@ -232,22 +331,47 @@ float integral_expquad_erfx(const Quadratic& expQuad, float x0, float x1) {
     return sum;
 }
 
-
 // integral of exp(-quad(x))erf(linear(x))
 float integral_expquad_erflin(const Quadratic& expQuad, const Linear& erfLin,
                             float x0, float x1) {
     Linear y = erfLin;
     // rewrite integral in terms of y
     // exp(-quad(y))*erf(y)*1/y.a
-    Quadratic yExpQuad = expQuad.changeVar(y);
-    float scale = 1 / y.a;
+    float dydx;
+    Quadratic yExpQuad = expQuad.changeVar(y, &dydx);
+    float scale = 1 / dydx;
     float y0 = y(x0), y1 = y(x1);
 
     return scale * integral_expquad_erfx(yExpQuad, y0, y1);
 }
 
 
+// integral of exp(-quad(u,v)) dv du over triangle
+float integral_expquaduv(float cuu, float cuv, float cvv, float cu, float cv, float cc,
+    float u0, float u1, float v0, float v1) {
+    
+    // evaluate dv integral
+    // exp(-cvv*v^2) term will be moved out front for now, which gives
+    // exp(-cvv*v^2) * int(exp^(-quadL(v)dv, v0, f(u));
+    
+    Linear fu = Linear(v0 - v1, u1*v1 - u0*v0) / (u1 - u0);
+    QuadraticL expQuadL(cuu, cuv, cu, cv, cc);
 
+    // complete the square on the exp quadratic to express it as 
+    // y^2 + r = ax^2+bx+c
+    LinearL yL;
+    Quadratic rL;
+    expQuadL.completeTheSquare(&yL, &rL);
+
+    // rewrite integral in terms of y:
+    // exp(-yL^2-rL)*dx/dy
+    float dydx;
+    QuadraticL yExpQuadL = expQuadL.changeVar(yL, &dydx);
+    float scale = exp(-r) / dydx; // take constants outside
+    float y0 = y(x0), y1 = y(x1);
+
+    return scale * integral_expx2_quad(yQuad, y0, y1);
+}
 
 
 int main(void) {
