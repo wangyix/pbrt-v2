@@ -30,9 +30,9 @@ GlintsMapData::GlintsMapData(const unsigned char* texels, int w, int h, int chan
             float t = ((float)u[1] - 128.0) / 128.0;
             float z_sq = 1.0 - s*s - t*t;
             float z;
-            //if (z_sq > 0.0) {
-            //    z = sqrt(z_sq);
-            //} else {
+            if (z_sq > 0.0) {
+                z = sqrt(z_sq);
+            } else {
                 s = 0.0;
                 t = 0.0;
                 z = 1.0;
@@ -209,13 +209,13 @@ float GlintsMapData::D(float s, float t, const GlintsPixelFootprint& footprint,
     float ret = recursiveD(s, t, stCullRadiusSq, roughness, pqc, dpq2dxy, xyCullRadiusSq,
         0, width, 0, height, stMinMaxTree.size() - 1);
 
-if (s*s + t*t < stCullRadiusSq) {
-    printf("D(%f, %f) = %f\n", s, t, ret);
-    float x_sq = s*s + t*t;
-    float sig = roughness;
-    float g = 1 / (sig*sig * (2.0*M_PI)) * exp(-x_sq / (2 * sig*sig));
-    printf("should be:  %f\n\n", g);
-}
+    /*if (s*s + t*t < stCullRadiusSq) {
+        printf("D(%f, %f) = %f\n", s, t, ret);
+        float x_sq = s*s + t*t;
+        float sig = roughness;
+        float g = 1 / (sig*sig * (2.0*M_PI)) * exp(-x_sq / (2 * sig*sig));
+        printf("should be:  %f\n\n", g);
+    }*/
     return ret;
 }
 
