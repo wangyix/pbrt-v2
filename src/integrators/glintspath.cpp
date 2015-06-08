@@ -28,8 +28,8 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
     bool glintsMicrofacetDistributionUseApprox;
 
     // calculate offset of the pixel center from the sample
-    float pixelLeft = min(Round2Int(sample->imageX), filmXResolution - 1);
-    float pixelTop = min(Round2Int(sample->imageY), filmYResolution - 1);
+    float pixelLeft = min(Floor2Int(sample->imageX), filmXResolution - 1);
+    float pixelTop = min(Floor2Int(sample->imageY), filmYResolution - 1);
     float dxToPixelCenter = pixelLeft + 0.5f - sample->imageX;
     float dyToPixelCenter = pixelTop + 0.5f - sample->imageY;
 
@@ -51,6 +51,12 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         const Normal &n = bsdf->dgShading.nn;
         Vector wo = -ray.d;
 
+        // set glints bxdfs to use or not use approximation distribution based on if the
+        // path has been all specular bounces so far or not.
+        // If yes, do not use approximation.
+        BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, nonSpecularBounceOccurred,
+            dxToPixelCenter, dyToPixelCenter, footprintScale);
+
         const LightSampleOffsets* lightSampleOffset = NULL;
         const BSDFSampleOffsets* bsdfSampleOffset = NULL;
         if (bounces < SAMPLE_DEPTH) {
@@ -70,7 +76,7 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
             L += pathThroughput *
                 UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
                 true, true,
-                dxToPixelCenter, dyToPixelCenter, footprintScale,
+                //dxToPixelCenter, dyToPixelCenter, footprintScale,
                 scene, renderer, arena, p, n, wo,
                 isectp->rayEpsilon, ray.time, bsdf, sample, rng,
                 lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
@@ -78,7 +84,7 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
             L += pathThroughput *
                 UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
                 false, false,
-                dxToPixelCenter, dyToPixelCenter, footprintScale,
+                //dxToPixelCenter, dyToPixelCenter, footprintScale,
                 scene, renderer, arena, p, n, wo,
                 isectp->rayEpsilon, ray.time, bsdf, sample, rng,
                 lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
@@ -93,12 +99,6 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
             0);
         else
             outgoingBSDFSample = BSDFSample(rng);
-
-        // set glints bxdfs to use or not use approximation distribution based on if the
-        // path has been all specular bounces so far or not.
-        // If yes, do not use approximation.
-        BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, nonSpecularBounceOccurred,
-            dxToPixelCenter, dyToPixelCenter, footprintScale);
 
         Vector wi;
         float pdf;

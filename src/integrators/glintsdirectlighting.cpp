@@ -37,6 +37,9 @@ Spectrum GlintsDirectLightingIntegrator::Li(const Scene *scene,
         return Spectrum(0.f);
     }
 
+    // approximation will not be used; footprint needs no modification
+    BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, false, 0.0f, 0.0f, 1.0f);
+
     // Compute direct lighting for _GlintsDirectLightingIntegrator_ integrator
     if (scene->lights.size() > 0) {
         L += UniformSampleAllPointLightsFromGlintsMaterial(

@@ -55,7 +55,7 @@ Spectrum UniformSampleAllPointLightsFromGlintsMaterial(const Scene *scene,
     Spectrum L(0.);
 
     // approximation will not be used; footprint needs no modification
-    BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, false, 0.0f, 0.0f, 1.0f);
+    //BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, false, 0.0f, 0.0f, 1.0f);
 
     for (uint32_t i = 0; i < scene->lights.size(); ++i) {
         Light *light = scene->lights[i];
@@ -193,7 +193,7 @@ Spectrum UniformSampleOneLightGlints(const Scene *scene,
     }
 
     // glints bxdfs will use approximation
-    BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, true);
+    //BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, true);
 
     return (float)nLights *
         EstimateDirect(scene, renderer, arena, light, p, n, wo,
@@ -206,7 +206,7 @@ Spectrum UniformSampleOneLightGlints(const Scene *scene,
 // GlintsMicrofacet will not use its approximation
 Spectrum UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
     bool glintsMaterial, bool nonPointLightsOnly,
-    float dxToPixelCenter, float dyToPixelCenter, float footprintScale,
+    //float dxToPixelCenter, float dyToPixelCenter, float footprintScale,
     const Scene *scene,
     const Renderer *renderer, MemoryArena &arena, const Point &p,
     const Normal &n, const Vector &wo, float rayEpsilon, float time,
@@ -258,11 +258,10 @@ Spectrum UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
     if (glintsMaterial) {
         flags = BxDFType(BSDF_GLINTS);
         // glint bxdfs will not use approximation
-        BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, false,
-            dxToPixelCenter, dyToPixelCenter, footprintScale);
+        //BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, false,
+        //    dxToPixelCenter, dyToPixelCenter, footprintScale);
     } else {
         flags = BxDFType(BSDF_ALL & ~BSDF_SPECULAR);
-        // no need to set glints bxdfs use approx: they will not be sampled
     }
 
     return (float)nLights *

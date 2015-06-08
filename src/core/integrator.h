@@ -95,7 +95,7 @@ Spectrum UniformSampleOneLightGlints(const Scene *scene, const Renderer *rendere
     const BSDFSampleOffsets *bsdfSampleOffset = NULL);
 Spectrum UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
     bool glintsMaterial, bool nonPointLightsOnly,
-    float dxToPixelCenter, float dyToPixelCenter, float footprintScale,
+    //float dxToPixelCenter, float dyToPixelCenter, float footprintScale,
     const Scene *scene, const Renderer *renderer,
     MemoryArena &arena, const Point &p, const Normal &n, const Vector &wo,
     float rayEpsilon, float time, BSDF *bsdf,

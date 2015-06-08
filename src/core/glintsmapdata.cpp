@@ -36,7 +36,7 @@ GlintsMapData::GlintsMapData(const unsigned char* texels, int w, int h, int chan
                 s = 0.0;
                 t = 0.0;
                 z = 1.0;
-            //}
+            }
             float* d = &data[3 * (i*(width + 1) + j)];
             d[0] = s;
             d[1] = t;
