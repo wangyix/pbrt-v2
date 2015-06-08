@@ -19,9 +19,10 @@ GlintsMapData::GlintsMapData(const unsigned char* texels, int w, int h, int chan
         exit(1);
     }
 
-    data = new float[3 * width * height];
+    // one pixel wide pad on right and bottom side with wrapped values
+    data = new float[3 * (width + 1) * (height + 1)];
 
-    // normalize all normals
+    // fill out main part of data
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             const unsigned char* u = &texels[channels * (i*width + j)];
@@ -36,11 +37,28 @@ GlintsMapData::GlintsMapData(const unsigned char* texels, int w, int h, int chan
                 t = 0.0;
                 z = 1.0;
             }
-            float* d = &data[3 * (i*width + j)];
+            float* d = &data[3 * (i*(width + 1) + j)];
             d[0] = s;
             d[1] = t;
             d[2] = z;
         }
+    }
+    // fill out one pixel wrap borders
+    // bottom border
+    for (int j = 0; j < width; j++) {
+        float* c = &data[3 * (0*(width + 1) + j)];
+        float* d = &data[3 * (height*(width + 1) + j)];
+        d[0] = c[0];
+        d[1] = c[1];
+        d[2] = c[2];
+    }
+    // right border (and bottom right pixel)
+    for (int i = 0; i <= height; i++) {
+        float* c = &data[3 * (i * (width + 1) + 0)];
+        float* d = &data[3 * (i * (width + 1) + width)];
+        d[0] = c[0];
+        d[1] = c[1];
+        d[2] = c[2];
     }
 
     buildStMinMaxTree();
@@ -56,20 +74,22 @@ GlintsMapData::~GlintsMapData() {
     stMinMaxTree.clear();
 }
 
+// level 0 is width*height
+// level 1 is (width/2)*(height/2)
+// ...
 void GlintsMapData::buildStMinMaxTree() {
     int level = 0;
     int dim = width;
-    while (dim > 1) {
-        dim /= 2;
+    do {
         STMinMax* thisLevel = new STMinMax[dim*dim];
         if (level == 0) {
             for (int y = 0; y < dim; y++) {
                 for (int x = 0; x < dim; x++) {
                     STMinMax* e = &thisLevel[y*dim + x];
-                    e->update(stAt(2 * x, 2 * y));
-                    e->update(stAt(2 * x + 1, 2 * y));
-                    e->update(stAt(2 * x, 2 * y + 1));
-                    e->update(stAt(2 * x + 1, 2 * y + 1));
+                    e->update(stAt(x, y));
+                    e->update(stAt(x + 1, y));
+                    e->update(stAt(x, y + 1));
+                    e->update(stAt(x + 1, y + 1));
                 }
             }
         } else {
@@ -85,10 +105,28 @@ void GlintsMapData::buildStMinMaxTree() {
                 }
             }
         }
+        dim /= 2;
         stMinMaxTree.push_back(thisLevel);
         level++;
-    }
+    } while (dim >= 1);
 }
+
+// integrates G over texel triangles in a sub-region of the texture
+float GlintsMapData::recursiveD(float s, float t, float stCullRadiusSq,
+    const Eigen::Vector2f& pqc, const Eigen::Matrix2f& pqToXy, float xyCullRadiusSq,
+    int pfrom, int pto, int qfrom, int qto) const {
+
+    int dim = pto - pfrom;
+    assert(dim == qto - qfrom);
+    if (dim == 1) {
+        int p = pfrom;
+        int q = qfrom;
+
+    }
+    return 0.0;
+}
+
+
 
 
 bool cullSquare(const Vector2f& c1, const Vector2f& c2,
@@ -210,18 +248,19 @@ void GlintsMapData::normalAt(float u, float v, float* s, float* t) const {
     *s = wh.x;
     *t = wh.y;*/
 
+    u -= Floor2Int(u);
+    v -= Floor2Int(v);
+    assert(u >= 0.0f && u < 1.0f);
+    assert(v >= 0.0f && v < 1.0f);
+
     // find the four texels near u,v for bilinear interpolation
     int x0 = Floor2Int(u * width - 0.5f);
     int x1 = x0 + 1;
     float tx = (u * width - 0.5f) - x0;
-    x0 = Mod(x0, width);
-    x1 = Mod(x1, width);
 
     int y0 = Floor2Int(v * height - 0.5f);
     int y1 = y0 + 1;
     float ty = (v * height - 0.5f) - y0;
-    y0 = Mod(y0, height);
-    y1 = Mod(y1, height);
 
     assert(tx >= 0.0f && tx <= 1.0f);
     assert(ty >= 0.0f && ty <= 1.0f);
@@ -243,8 +282,8 @@ void GlintsMapData::normalAt(float u, float v, float* s, float* t) const {
 
 
 Vector2f GlintsMapData::stAt(int x, int y) const {
-    return Vector2f(data[3 * (y*width + x)],
-                    data[3 * (y*width + x) + 1]);
+    return Vector2f(data[3 * (y*(width + 1) + x)],
+                    data[3 * (y*(width + 1) + x) + 1]);
 }
 
 

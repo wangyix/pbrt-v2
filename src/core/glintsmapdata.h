@@ -55,9 +55,9 @@ private:
         float s, float t, const GlintsPixelFootprint& footprint,
         float roughness) const;
 
-    float recursiveD(float s, float t,
-        float dpdx, 
-        float roughness) const;
+    float recursiveD(float s, float t, float stCullRadiusSq,
+        const Eigen::Vector2f& pqc, const Eigen::Matrix2f& pqToXy, float xyCullRadiusSq,
+        int pfrom, int pto, int qfrom, int qto) const;
 
     float* data;
     int width, height;
