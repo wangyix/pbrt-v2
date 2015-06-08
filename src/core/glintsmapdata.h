@@ -50,14 +50,14 @@ private:
 
     void buildStMinMaxTree();
 
-    float triangleIntegralG(float u0, float u1, float v0, float v1,
-        const Eigen::Vector2f& st_u0v0, const Eigen::Vector2f& st_u1v0, const Eigen::Vector2f& st_u0v1,
-        float s, float t, const GlintsPixelFootprint& footprint,
-        float roughness) const;
+    float triangleIntegralG(float p0, float p1, float q0, float q1,
+        const Eigen::Vector2f& st_p0q0, const Eigen::Vector2f& st_p1q0, const Eigen::Vector2f& st_p0q1,
+        float s, float t, float roughness, const Eigen::Vector2f& pqc, const Eigen::Matrix2f& dpq2dxy) const;
 
-    float recursiveD(float s, float t, float stCullRadiusSq,
-        const Eigen::Vector2f& pqc, const Eigen::Matrix2f& pqToXy, float xyCullRadiusSq,
-        int pfrom, int pto, int qfrom, int qto) const;
+
+    float recursiveD(float s, float t, float stCullRadiusSq, float roughness,
+        const Eigen::Vector2f& pqc, const Eigen::Matrix2f& dpq2dxy, float xyCullRadiusSq,
+        int pfrom, int pto, int qfrom, int qto, int level) const;
 
     float* data;
     int width, height;

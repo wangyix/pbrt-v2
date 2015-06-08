@@ -110,7 +110,11 @@ Linear operator*(double c, const Linear& l) {
 Linear operator+(double c, const Linear& l) {
     return Linear(l.a, c + l.b);
 }
-
+// find linear function to map [x0,x1] to [y0,y1]
+Linear mappingRangeToRange(double x0, double x1, double y0, double y1) {
+    assert(x0 != x1);
+    return Linear((y1 - y0) / (x1 - x0), (x1*y0 - x0*y1) / (x1 - x0));
+}
 
 struct Quadratic {
     Quadratic() : a(0.0), b(0.0), c(0.0) {}
@@ -389,9 +393,21 @@ double integral_expquad_erfx(const Quadratic& expQuad, double x0, double x1) {
     return sum;
 }
 
+// integral of exp(-quad(x))erf(constant)
+double integral_expquad_erfc(const Quadratic& expQuad, double c,
+    double x0, double x1) {
+    double ret = integral_expquad_quad(expQuad, Quadratic(0.0, 0.0, erf(c)), x0, x1);
+    assert(!isnan(ret));
+    return ret;
+}
+
 // integral of exp(-quad(x))erf(linear(x))
 double integral_expquad_erflin(const Quadratic& expQuad, const Linear& erfLin,
     double x0, double x1) {
+    if (abs(erfLin.a) < 0.000001) {
+        return integral_expquad_erfc(expQuad, erfLin.b, x0, x1);
+    }
+
     Linear y = erfLin;
     // rewrite integral in terms of y
     // exp(-quad(y))*erf(y)*1/y.a
@@ -406,8 +422,35 @@ double integral_expquad_erflin(const Quadratic& expQuad, const Linear& erfLin,
 }
 
 
+struct QuadraticUV {
+    QuadraticUV() : cuu(0.0), cuv(), cvv(0.0), cu(0.0), cv(0.0), cc(0.0) {}
+    QuadraticUV(double cuu, double cuv, double cvv, double cu, double cv, double cc)
+        : cuu(cuu), cuv(cuv), cvv(cvv), cu(cu), cv(cv), cc(cc) {}
+    double operator()(double u, double v) const {
+        return cuu*u*u + cuv*u*v + cvv*v*v + cu*u + cv*v + cc;
+    }
+    QuadraticUV changeVar(const Linear& s, const Linear& t) const {
+        return substitute(s.inverse(), t.inverse());
+    }
+    // replaces x with dx + e
+    QuadraticUV substitute(const Linear& s, const Linear& t) const {
+        double a1 = s.a, b1 = s.b;
+        double a2 = t.a, b2 = t.b;
+        return QuadraticUV(
+            a1*a1*cuu,
+            a1*a2*cuv,
+            a2*a2*cvv,
+            a1*cu + 2 * a1*b1*cuu + a1*b2*cuv,
+            a2*cv + 2 * a2*b2*cvv + a2*b1*cuv,
+            cuu*b1*b1 + cuv*b1*b2 + cvv*b2*b2 + cu*b1 + cv*b2 + cc
+            );
+    }
+    double cuu, cuv, cvv, cu, cv, cc;
+};
+
+
 // integral of exp(-quad(u,v)) dv du over triangle
-double integral_expquaduv_triangle(double cuu, double cuv, double cvv, double cu, double cv, double cc,
+double integral_expquaduv(double cuu, double cuv, double cvv, double cu, double cv, double cc,
     double u0, double u1, double v0, double v1) {
     // upper bound of inner dv integral
     Linear fu = Linear(v0 - v1, u1*v1 - u0*v0) / (u1 - u0);
@@ -441,4 +484,26 @@ double integral_expquaduv_triangle(double cuu, double cuv, double cvv, double cu
 
     assert(!isnan(ret));
     return ret;
+}
+
+double integral_expquaduv_conditioned(
+    double cuu, double cuv, double cvv, double cu, double cv, double cc,
+    double u0, double u1, double v0, double v1) {
+
+    QuadraticUV expQuadUv(cuu, cuv, cvv, cu, cv, cc);
+
+    Linear s = mappingRangeToRange(u0, u1, -0.5, 0.5);
+    double dsdu = s.a;
+    Linear t = mappingRangeToRange(v0, v1, -0.5, 0.5);
+    double dtdv = t.a;
+    QuadraticUV expQuadSt = expQuadUv.changeVar(s, t);
+
+    double scale = 1.0 / (dsdu * dtdv);
+    double s0 = s(u0), s1 = s(u1);
+    double t0 = t(v0), t1 = t(v1);
+
+
+    return scale *
+        integral_expquaduv(expQuadSt.cuu, expQuadSt.cuv, expQuadSt.cvv, expQuadSt.cu,
+        expQuadSt.cv, expQuadSt.cc, s0, s1, t0, t1);
 }
