@@ -1,5 +1,6 @@
 #include "glintsnormalmap.h"
 #include "imageio.h"
+#include "..\core\lodepng.h"
 #include <stdio.h>
 
 GlintsNormalTexture::GlintsNormalTexture(TextureMapping2D* m,
@@ -26,21 +27,23 @@ GlintsMapData* GlintsNormalTexture::GetTexture(const string& filename) {
     if (textures.find(filename) != textures.end())
         return textures[filename];
 
-    int width, height;
+    /*int width, height;
     RGBSpectrum* texels = ReadImage(filename, &width, &height);
     if (!texels) {
         printf("Unable to open glints normal map file %s!\n", filename.c_str());
         exit(1);
-    }
-    /*if (width != height || 
-        (width & (width - 1)) != 0 || (height & (height - 1)) != 0) {
-        printf("Glints normal map %s is %d x %d; dimensions must be equal and a power of 2!\n",
-            filename.c_str(), width, height);
-        exit(1);
     }*/
-
-    GlintsMapData* ret = new GlintsMapData(texels, width, height);
-    delete[] texels;
+    unsigned width, height;
+    vector<unsigned char> image;
+    unsigned error = lodepng::decode(image, width, height, filename);
+    if (error) {
+        printf("Unable to open glints normal map file %s!\n", filename.c_str());
+        printf("Make sure it's a png file.\n");
+        exit(1);
+    }
+    GlintsMapData* ret = new GlintsMapData(&image[0], width, height, 4);
+    
+    //delete[] texels;
     
     textures[filename] = ret;
     return ret;

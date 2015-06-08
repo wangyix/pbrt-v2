@@ -352,7 +352,8 @@ bool GlintsPixelFootprint::operator==(const GlintsPixelFootprint& fp) const {
 }
 bool GlintsPixelFootprint::isValid() const {
     return (!isnan(u) && !isnan(v) && !isnan(dudx) && !isnan(dvdx) && !isnan(dudy) && !isnan(dvdy)
-        && (dudx != 0.0f || dvdx != 0.0f) && (dudy != 0.0f || dvdy != 0.0f));
+        && (dudx != 0.0f || dvdx != 0.0f) && (dudy != 0.0f || dvdy != 0.0f)
+        && u >= 0.0f && u <= 1.0f && v >= 0.0f && v <= 1.0f);
 }
 
 
@@ -440,6 +441,9 @@ void GlintsNormalMapDistribution::setPixelFootprintFromSample(float dx, float dy
     // move center to pixel center
     pixelFootprint.u = sampleFootprint.u + pixelFootprint.dudx * dx + pixelFootprint.dudy * dy;
     pixelFootprint.v = sampleFootprint.v + pixelFootprint.dvdx * dx + pixelFootprint.dvdy * dy;
+    // modulo footprint center to put it in range [0,1]^2
+    pixelFootprint.u -= Floor2Int(pixelFootprint.u);
+    pixelFootprint.v -= Floor2Int(pixelFootprint.v);
 }
 
 

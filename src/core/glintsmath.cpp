@@ -15,7 +15,7 @@ using namespace std;
 
 #define ERF_INTERVALS 6
 #define ERF_INTERVAL_WIDTH (6.0f / ERF_INTERVALS)
-float erfQuadCoeffs[ERF_INTERVALS][3] = {
+double erfQuadCoeffs[ERF_INTERVALS][3] = {
     { 0.0077718428863119277, 0.043514858915608634, -0.9393799187329831 },
     { 0.18837446996390575, 0.71774488196095576, -0.31333038095266502 },
     { 0.39659792535275584, 1.2392987183024708, 0 },
@@ -28,7 +28,7 @@ float erfQuadCoeffs[ERF_INTERVALS][3] = {
 
 #define ERF_INTERVALS 16
 #define ERF_INTERVAL_WIDTH (6.0f / ERF_INTERVALS)
-float erfQuadCoeffs[ERF_INTERVALS][3] = {
+double erfQuadCoeffs[ERF_INTERVALS][3] = {
     { 0.0012538983019272697, 0.0075419385860549483, -0.98863717846218213 },
     { 0.0076089715720849991, 0.040446645348687131, -0.94605274996245303 },
     { 0.034135618362908619, 0.15826869439552815, -0.81524428898560519 },
@@ -49,7 +49,7 @@ float erfQuadCoeffs[ERF_INTERVALS][3] = {
 #endif
 
 
-/*float erf(float x) {
+/*double erf(double x) {
 if (x <= -3.0)
 return -1.0;
 else if (x >= 3.0)
@@ -58,9 +58,9 @@ else {
 // find which interval x belongs to
 int i = floor((x + 3.0) / 6.0 * ERF_INTERVALS);
 assert(i >= 0 && i < ERF_INTERVALS);
-float a = erfQuadCoeffs[i][0];
-float b = erfQuadCoeffs[i][1];
-float c = erfQuadCoeffs[i][2];
+double a = erfQuadCoeffs[i][0];
+double b = erfQuadCoeffs[i][1];
+double c = erfQuadCoeffs[i][2];
 return (a*x + b)*x + c;
 }
 }*/
@@ -69,27 +69,27 @@ return (a*x + b)*x + c;
 
 struct Linear {
     Linear() : a(0.0), b(0.0) {}
-    Linear(float bb) : a(0.0), b(bb) {}
-    Linear(float aa, float bb) : a(aa), b(bb) {}
-    float operator()(float x) const {
+    Linear(double bb) : a(0.0), b(bb) {}
+    Linear(double aa, double bb) : a(aa), b(bb) {}
+    double operator()(double x) const {
         return a*x + b;
     }
-    Linear operator+(float c) const {
+    Linear operator+(double c) const {
         return Linear(a, b + c);
     }
     Linear operator+(const Linear& l) const {
         return Linear(a + l.a, b + l.b);
     }
-    Linear operator-(float c) const {
+    Linear operator-(double c) const {
         return Linear(a, b - c);
     }
     Linear operator-() const {
         return Linear(-a, -b);
     }
-    Linear operator*(float c) const {
+    Linear operator*(double c) const {
         return Linear(a*c, b*c);
     }
-    Linear operator/(float c) const {
+    Linear operator/(double c) const {
         return Linear(a / c, b / c);
     }
     // becomes inverse of linear function
@@ -102,20 +102,20 @@ struct Linear {
         assert(a != 0.0);
         return Linear(1.0 / a, -b / a);
     }
-    float a, b;
+    double a, b;
 };
-Linear operator*(float c, const Linear& l) {
+Linear operator*(double c, const Linear& l) {
     return Linear(c*l.a, c*l.b);
 }
-Linear operator+(float c, const Linear& l) {
+Linear operator+(double c, const Linear& l) {
     return Linear(l.a, c + l.b);
 }
 
 
 struct Quadratic {
     Quadratic() : a(0.0), b(0.0), c(0.0) {}
-    Quadratic(float aa, float bb, float cc) : a(aa), b(bb), c(cc) {}
-    float operator()(float x) const {
+    Quadratic(double aa, double bb, double cc) : a(aa), b(bb), c(cc) {}
+    double operator()(double x) const {
         return (a*x + b)*x + c;
     }
     // changes to a quadratic in terms of y
@@ -125,12 +125,12 @@ struct Quadratic {
     }
     // replaces x with dx + e
     Quadratic substitute(const Linear& f) const {
-        float d = f.a, e = f.b;
+        double d = f.a, e = f.b;
         return Quadratic(a*d*d, (2 * a*e + b) * d, (a*e + b)*e + c);
     }
     // computes c,d,e so that (cx+d)^2+e = ax^2+bx+c
     // expects a to be positive
-    void completeTheSquare(Linear* sq, float* remainder) const {
+    void completeTheSquare(Linear* sq, double* remainder) const {
         assert(a > 0.0);
         sq->a = sqrt(a);
         sq->b = 0.5 * b / sqrt(a);
@@ -142,13 +142,13 @@ struct Quadratic {
     Quadratic operator-(const Quadratic& s) const {
         return Quadratic(a - s.a, b - s.b, c - s.c);
     }
-    Quadratic operator*(float s) const {
+    Quadratic operator*(double s) const {
         return Quadratic(a*s, b*s, c*s);
     }
-    Quadratic operator/(float s) const {
+    Quadratic operator/(double s) const {
         return Quadratic(a / s, b / s, c / s);
     }
-    float a, b, c;
+    double a, b, c;
 };
 
 Quadratic operator*(const Linear& l1, const Linear& l2) {
@@ -165,8 +165,8 @@ Quadratic operator-(const Linear& l1, const Quadratic& l2) {
 // represents ax + by + c
 struct LinearL {
     LinearL() : a(0.0), b() {}
-    LinearL(float aa, const Linear& bb) : a(aa), b(bb) {}
-    Linear operator()(float x) const {
+    LinearL(double aa, const Linear& bb) : a(aa), b(bb) {}
+    Linear operator()(double x) const {
         return a*x + b;
     }
     Linear operator()(const Linear& x) const {
@@ -182,17 +182,17 @@ struct LinearL {
         assert(a != 0.0);
         return LinearL(1.0 / a, -b / a);
     }
-    float a;
+    double a;
     Linear b;
 };
 
 // represents ax^2 + byx + cx + dy + e
 struct QuadraticL {
     QuadraticL() : a(0.0), b(), c(0.0) {}
-    QuadraticL(float aa, const Linear& bb, const Linear& cc) : a(aa), b(bb), c(cc) {}
-    QuadraticL(float cxx, float cyx, float cx, float cy, float cc)
+    QuadraticL(double aa, const Linear& bb, const Linear& cc) : a(aa), b(bb), c(cc) {}
+    QuadraticL(double cxx, double cyx, double cx, double cy, double cc)
         : a(cxx), b(cyx, cx), c(cy, cc) {}
-    Linear operator()(float x) const {
+    Linear operator()(double x) const {
         return (a*x + b)*x + c;
     }
     // computes c,d,e so that (cx+d)^2+e = ax^2+bx+c
@@ -203,14 +203,14 @@ struct QuadraticL {
         sq->b = 0.5 * b / sqrt(a);
         *remainder = c - 0.25 * b * b / a;
     }
-    float a;
+    double a;
     Linear b, c;
 };
 
 
 
 
-int getErfIntervalIndex(float x) {
+int getErfIntervalIndex(double x) {
     if (x <= -3.0f)
         return -1;
     else if (x >= 3.0f)
@@ -223,7 +223,7 @@ int getErfIntervalIndex(float x) {
 }
 
 // gets the quadratic approximation in interval i of erf function
-Quadratic getErfIntervalApprox(int i, float* xfrom, float* xto) {
+Quadratic getErfIntervalApprox(int i, double* xfrom, double* xto) {
     if (i < 0) {
         *xfrom = -INFINITY;
         *xto = -3.0f;
@@ -249,17 +249,23 @@ Quadratic getErfIntervalApprox(int i, float* xfrom, float* xto) {
 
 
 // integral of exp(-x^2)
-float integral_expx2(float x0, float x1) {
-    return 0.5 * SQRT_PI * (erf(x1) - erf(x0));
+double integral_expx2(double x0, double x1) {
+    double ret = 0.5 * SQRT_PI * (erf(x1) - erf(x0));
+    assert(!isnan(ret));
+    return ret;
 }
 // inegral of exp(-x^2)*x
-float integral_expx2_x(float x0, float x1) {
-    return 0.5 * (exp(-x0*x0) - exp(-x1*x1));
+double integral_expx2_x(double x0, double x1) {
+    double ret = 0.5 * (exp(-x0*x0) - exp(-x1*x1));
+    assert(!isnan(ret));
+    return ret;
 }
 // integral of exp(-x^2)*x^2
-float integral_expx2_x2(float x0, float x1) {
-    return 0.25 * (SQRT_PI * (erf(x1) - erf(x0)))
+double integral_expx2_x2(double x0, double x1) {
+    double ret = 0.25 * (SQRT_PI * (erf(x1) - erf(x0)))
         + 0.5 * (exp(-x0*x0)*x0 - exp(-x1*x1)*x1);
+    assert(!isnan(ret));
+    return ret;
 }
 
 
@@ -269,37 +275,41 @@ float integral_expx2_x2(float x0, float x1) {
 
 
 // integral of exp(-x^2)*quad(x)
-float integral_expx2_quad(const Quadratic& quad, float x0, float x1) {
-    return quad.a * integral_expx2_x2(x0, x1)
+double integral_expx2_quad(const Quadratic& quad, double x0, double x1) {
+    double ret = quad.a * integral_expx2_x2(x0, x1)
         + quad.b * integral_expx2_x(x0, x1)
         + quad.c * integral_expx2(x0, x1);
+    assert(!isnan(ret));
+    return ret;
 }
 
 // integral of exp(c)*quad2(x)
-float integral_expc_quad(float n, const Quadratic& quad,
-    float x0, float x1) {
-    float a = quad.a;
-    float b = quad.b;
-    float c = quad.c;
-    return -1.0 / 6.0 * exp(-n) * (x0 - x1) * (
+double integral_expc_quad(double n, const Quadratic& quad,
+    double x0, double x1) {
+    double a = quad.a;
+    double b = quad.b;
+    double c = quad.c;
+    double ret = -1.0 / 6.0 * exp(-n) * (x0 - x1) * (
         2 * a * (x0*x0 + x0*x1 + x1*x1)
         + 3 * b * (x0 + x1)
         + 6 * c
         );
+    assert(!isnan(ret));
+    return ret;
 }
 
 // integral of exp(-linear(x))*quad2(x)
-float integral_explin_quad(const Linear& expLin, const Quadratic& quad,
-    float x0, float x1) {
+double integral_explin_quad(const Linear& expLin, const Quadratic& quad,
+    double x0, double x1) {
     if (expLin.a == 0.0)
         return integral_expc_quad(expLin.b, quad, x0, x1);
 
-    float a = quad.a;
-    float b = quad.b;
-    float c = quad.c;
-    float m = expLin.a;
-    float n = expLin.b;
-    return 1 / (m*m*m) * exp(-n)*(
+    double a = quad.a;
+    double b = quad.b;
+    double c = quad.c;
+    double m = expLin.a;
+    double n = expLin.b;
+    double ret = 1 / (m*m*m) * exp(-n)*(
         exp(-m*x0) * (
         a*((m*x0 + 1)*(m*x0 + 1) + 1)
         + m*(b*m*x0 + b + c*m)
@@ -309,13 +319,22 @@ float integral_explin_quad(const Linear& expLin, const Quadratic& quad,
         - m*(b*m*x1 + b + c*m)
         )
         );
+    assert(!isnan(ret));
+    return ret;
 }
 // integral of exp(-quad1(x))*quad2(x)
-float integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
-    float x0, float x1) {
-    assert(expQuad.a >= 0.0);
+double integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
+    double x0, double x1) {
 
-    if (expQuad.a == 0.0f) {
+    if (expQuad.a < 0.0) {
+        printf("%f", expQuad.a);
+    }
+
+    //assert(expQuad.a >= 0.0);
+
+    // if we get coefficient a < 0 due to rounding error, just clamp it
+    // to 0.
+    if (expQuad.a <= 0.0f) {
         Linear expLin(expQuad.b, expQuad.c);
         return integral_explin_quad(expLin, quad, x0, x1);
     }
@@ -323,31 +342,33 @@ float integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
     // complete the square on the exp quadratic to express it as 
     // y^2 + r = ax^2+bx+c
     Linear y;
-    float r;
+    double r;
     expQuad.completeTheSquare(&y, &r);
 
     // rewrite integral in terms of y:
     // exp(-y^2-r)*yQuad(y)*1/y.a dy = exp(-r)/y.a * exp(-y^2)*yQuad(y)
     Quadratic yQuad = quad.changeVar(y);
-    float dydx = y.a;
-    float scale = exp(-r) / dydx; // take constants outside
-    float y0 = y(x0), y1 = y(x1);
+    double dydx = y.a;
+    double scale = exp(-r) / dydx; // take constants outside
+    double y0 = y(x0), y1 = y(x1);
 
-    return scale * integral_expx2_quad(yQuad, y0, y1);
+    double ret =  scale * integral_expx2_quad(yQuad, y0, y1);
+    assert(!isnan(ret));
+    return ret;
 }
 
 // integral of exp(-quad(x))erf(x)
-float integral_expquad_erfx(const Quadratic& expQuad, float x0, float x1) {
+double integral_expquad_erfx(const Quadratic& expQuad, double x0, double x1) {
     bool boundsFlipped = false;
     if (x0 > x1) {
-        float temp = x0;
+        double temp = x0;
         x0 = x1;
         x1 = temp;
         boundsFlipped = true;
     }
     int i = getErfIntervalIndex(x0);
-    float xfrom, xto;
-    float sum = 0.0f;
+    double xfrom, xto;
+    double sum = 0.0f;
     Quadratic intervalApprox;
     while (true) {
         intervalApprox = getErfIntervalApprox(i, &xfrom, &xto);
@@ -363,27 +384,31 @@ float integral_expquad_erfx(const Quadratic& expQuad, float x0, float x1) {
 
     if (boundsFlipped)
         sum = -sum;
+
+    assert(!isnan(sum));
     return sum;
 }
 
 // integral of exp(-quad(x))erf(linear(x))
-float integral_expquad_erflin(const Quadratic& expQuad, const Linear& erfLin,
-    float x0, float x1) {
+double integral_expquad_erflin(const Quadratic& expQuad, const Linear& erfLin,
+    double x0, double x1) {
     Linear y = erfLin;
     // rewrite integral in terms of y
     // exp(-quad(y))*erf(y)*1/y.a
     Quadratic yExpQuad = expQuad.changeVar(y);
-    float dydx = y.a;
-    float scale = 1 / dydx;
-    float y0 = y(x0), y1 = y(x1);
+    double dydx = y.a;
+    double scale = 1 / dydx;
+    double y0 = y(x0), y1 = y(x1);
 
-    return scale * integral_expquad_erfx(yExpQuad, y0, y1);
+    double ret = scale * integral_expquad_erfx(yExpQuad, y0, y1);
+    assert(!isnan(ret));
+    return ret;
 }
 
 
 // integral of exp(-quad(u,v)) dv du over triangle
-float integral_expquaduv_triangle(float cuu, float cuv, float cvv, float cu, float cv, float cc,
-    float u0, float u1, float v0, float v1) {
+double integral_expquaduv_triangle(double cuu, double cuv, double cvv, double cu, double cv, double cc,
+    double u0, double u1, double v0, double v1) {
     // upper bound of inner dv integral
     Linear fu = Linear(v0 - v1, u1*v1 - u0*v0) / (u1 - u0);
 
@@ -401,15 +426,19 @@ float integral_expquaduv_triangle(float cuu, float cuv, float cvv, float cu, flo
 
     // we can now write integral in terms of y:
     // exp(-yL^2-rL)*dx/dy = exp(-rL)*dx/dy * exp(-yL);
-    float dydx = yL.a;
+    double dydx = yL.a;
     expQuadOutside = expQuadOutside + rL;
     Linear yL0 = yL(v0), yL1 = yL(fu);
 
     // integrating gives: 1/dydx * exp(-quad(U)) * (erf(y1(u)) - erf(y0(u)))
     // adding the du integral outside gives:
     // 1/dydx * ( int(exp(-quad(u)*erf(y1(u))) - int(exp(-quad(u)*erf(y0(u))) )
-    return SQRT_PI / (2.0 * dydx) * (
+    double ret = 
+    SQRT_PI / (2.0 * dydx) * (
         integral_expquad_erflin(expQuadOutside, yL1, u0, u1) -
         integral_expquad_erflin(expQuadOutside, yL0, u0, u1)
         );
+
+    assert(!isnan(ret));
+    return ret;
 }

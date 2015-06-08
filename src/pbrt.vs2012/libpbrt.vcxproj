@@ -178,6 +178,7 @@
     <ClInclude Include="..\core\glintsmapdata.h" />
     <ClInclude Include="..\core\glintsmath.h" />
     <ClInclude Include="..\core\imageio.h" />
+    <ClInclude Include="..\core\lodepng.h" />
     <ClInclude Include="..\core\targa.h" />
     <ClInclude Include="..\core\integrator.h" />
     <ClInclude Include="..\core\intersection.h" />
@@ -1121,6 +1122,7 @@
     <ClCompile Include="..\core\glintsmapdata.cpp" />
     <ClCompile Include="..\core\glintsmath.cpp" />
     <ClCompile Include="..\core\imageio.cpp" />
+    <ClCompile Include="..\core\lodepng.cpp" />
     <ClCompile Include="..\core\StdAfx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
