@@ -25,7 +25,6 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
     // We need to exclude the paths handled by GlintsDirectLightingIntegrator, which are:
     // E S* G Lp, where E=eye, S=specular, G=glints, Lp=pointlight.
     bool nonSpecularBounceOccurred = false;
-    bool glintsMicrofacetDistributionUseApprox;
 
     // calculate offset of the pixel center from the sample
     float pixelLeft = min(Floor2Int(sample->imageX), filmXResolution - 1);

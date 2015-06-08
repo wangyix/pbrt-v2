@@ -330,10 +330,6 @@ double integral_explin_quad(const Linear& expLin, const Quadratic& quad,
 double integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
     double x0, double x1) {
 
-    if (expQuad.a < 0.0) {
-        printf("%f", expQuad.a);
-    }
-
     //assert(expQuad.a >= 0.0);
 
     // if we get coefficient a < 0 due to rounding error, just clamp it

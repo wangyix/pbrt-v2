@@ -400,18 +400,10 @@ float GlintsMapData::triangleIntegralG(float p0, float p1, float q0, float q1,
         );
 
     // calculate triangle integral of G(u,v)
-    //double integral = integral_expquaduv(cuu, cuv, cvv, cu, cv, cc, p0, p1, q0, q1);
     double integral_cond = integral_expquaduv_conditioned(cuu, cuv, cvv, cu, cv, cc, p0, p1, q0, q1);
-    //double integral = integral_expquaduv(cuu, cuv, cvv, cu, cv, cc, p0, p1, q0, q1);
-    if (abs(integral_cond) > 1) {
-        printf("%lf\n", integral_cond);
-    }
     if (isnan(integral_cond)) {
         return 0.0;
     }
-    /*if (integral_cond < -1.0f || integral < -1.0f) {
-        return 0.0f;
-    }*/
     if (integral_cond < 0.0f) {
         return 0.0;
     }
