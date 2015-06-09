@@ -55,7 +55,7 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         // If yes, do not use approximation.
         BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf,
             useApproxOnFirstBounce || nonSpecularBounceOccurred,
-            dxToPixelCenter, dyToPixelCenter, 1.0f);// footprintScale);
+            dxToPixelCenter, dyToPixelCenter, footprintScale);
 
         const LightSampleOffsets* lightSampleOffset = NULL;
         const BSDFSampleOffsets* bsdfSampleOffset = NULL;
