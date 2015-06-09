@@ -448,9 +448,7 @@ void GlintsNormalMapDistribution::setPixelFootprintFromSample(float dx, float dy
 
 
 float GlintsNormalMapDistribution::DstCached(float s, float t, const GlintsPixelFootprint& footprint) const {
-    static int hits = 0;
     if (dstCacheEntry.matches(s, t, footprint)) {
-        hits++;
         return dstCacheData;
     }
     dstCacheEntry.setTo(s, t, footprint);

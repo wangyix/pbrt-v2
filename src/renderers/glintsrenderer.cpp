@@ -9,7 +9,7 @@
 
 // GlintsRenderer Method Definitions
 GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
-    VolumeIntegrator* directVi, VolumeIntegrator* pathVi, const ParamSet& siParams) {
+    VolumeIntegrator* directVi, VolumeIntegrator* pathVi, const ParamSet& rendererParams) {
     
     camera = c;
     
@@ -20,7 +20,7 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
     directSampler = CreatePixelCentersSampler(camera->film, camera);
     if (!directSampler) Severe("Unable to create pixel centers sampler.");
 
-    directSurfIntegrator = CreateGlintsDirectLightingIntegrator(siParams);
+    directSurfIntegrator = CreateGlintsDirectLightingIntegrator(rendererParams);
     if (!directSurfIntegrator) Severe("Unable to create glints direct lighting integrator.");
 
     directVolIntegrator = directVi;
@@ -31,7 +31,7 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
 
     pathSampler = pathS;
 
-    pathSurfIntegrator = CreateGlintsPathSurfaceIntegrator(siParams, camera->film, pathSampler);
+    pathSurfIntegrator = CreateGlintsPathSurfaceIntegrator(rendererParams, camera->film, pathSampler);
     if (!pathSurfIntegrator) Severe("Unable to create glints path integrator.");
 
     pathVolIntegrator = pathVi;

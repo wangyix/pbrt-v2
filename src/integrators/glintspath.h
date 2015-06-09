@@ -42,9 +42,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class GlintsPathIntegrator : public SurfaceIntegrator {
 public:
-    GlintsPathIntegrator(int md, int xResolution, int yResolution, int pixelSamples) 
+    GlintsPathIntegrator(int md, int xResolution, int yResolution, int pixelSamples,
+        bool useApproxFirstBounce)
     : filmXResolution(xResolution), filmYResolution(yResolution),
-    footprintScale(sqrtf(pixelSamples)) {
+    footprintScale(sqrtf(pixelSamples)),
+    useApproxOnFirstBounce(useApproxFirstBounce) {
         maxDepth = md;
     }
     Spectrum Li(const Scene *scene, const Renderer *renderer,
@@ -61,6 +63,8 @@ private:
 
     const int filmXResolution, filmYResolution;
     const float footprintScale;
+
+    const bool useApproxOnFirstBounce;
 };
 
 

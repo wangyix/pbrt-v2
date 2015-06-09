@@ -1269,7 +1269,7 @@ Renderer *RenderOptions::MakeRenderer() const {
         if (!pathVolIntegrator) Severe("Unable to create glints path volume integrator.");
 
         renderer = new GlintsRenderer(pathSampler, camera, directVolIntegrator,
-            pathVolIntegrator, SurfIntegratorParams);
+            pathVolIntegrator, RendererParams);
 
         // Warn if no light sources are defined
         if (lights.size() == 0)
