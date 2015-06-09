@@ -10,11 +10,13 @@
 GlintsMaterial::GlintsMaterial(Reference<Texture<Spectrum> > et,
     Reference<Texture<Spectrum> > kk,
     Reference<Texture<float> > rough,
+    Reference<Texture<float> > approxRough,
     Reference<GlintsNormalTexture> normal,
     Reference<Texture<float> > bump) {
     eta = et;
     k = kk;
     roughness = rough;
+    approxRoughness = approxRough;
     normalMap = normal;
     bumpMap = bump;
 }
@@ -41,7 +43,8 @@ BSDF *GlintsMaterial::GetBSDF(const DifferentialGeometry &dgGeom,
         (fp, rough, normalMap->getMapData());
 
     // PLACEHOLDER!!!!!!
-    MicrofacetDistribution* mdApprox = BSDF_ALLOC(arena, Blinn)(1000.0f);
+    float blinnExp = 1.0f / approxRoughness->Evaluate(dgs);
+    MicrofacetDistribution* mdApprox = BSDF_ALLOC(arena, Blinn)(blinnExp);
 
     Fresnel *frMf = BSDF_ALLOC(arena, FresnelConductor)(eta->Evaluate(dgs),
         k->Evaluate(dgs));
@@ -99,6 +102,8 @@ GlintsMaterial *CreateGlintsMaterial(const Transform &xform, const TextureParams
 
     Reference<Texture<float> > roughness = mp.GetFloatTexture("roughness", .01f);
 
+    Reference<Texture<float> > approxRoughness = mp.GetFloatTexture("approxRoughness", .01f);
+
     Reference<Texture<float> > bumpMap = mp.GetFloatTextureOrNull("bumpmap");
 
     // default normalMap is the constant (0,0,1);
@@ -115,7 +120,7 @@ GlintsMaterial *CreateGlintsMaterial(const Transform &xform, const TextureParams
     }
     Reference<GlintsNormalTexture> normalMapCasted(p);
 
-    return new GlintsMaterial(eta, k, roughness, normalMapCasted, bumpMap);
+    return new GlintsMaterial(eta, k, roughness, approxRoughness, normalMapCasted, bumpMap);
 }
 
 

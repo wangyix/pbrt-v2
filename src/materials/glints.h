@@ -17,6 +17,7 @@ public:
     GlintsMaterial(Reference<Texture<Spectrum> > eta,
         Reference<Texture<Spectrum> > k,
         Reference<Texture<float> > rough,
+        Reference<Texture<float> > approxRough,
         Reference<GlintsNormalTexture> normal,
         Reference<Texture<float> > bump);
 
@@ -26,7 +27,7 @@ private:
     
     Reference<Texture<Spectrum> > eta, k;
     Reference<Texture<float> > roughness;
-    
+    Reference<Texture<float> > approxRoughness;
 
     Reference<GlintsNormalTexture> normalMap;
 

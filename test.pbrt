@@ -1,0 +1,92 @@
+Film "image"
+	"integer xresolution" [320] "integer yresolution" [240] 
+LookAt 0.3 0.27 0.4  0 .12 0  0 1 0
+Camera "perspective" "float fov" [60]
+
+Renderer "glints"
+Sampler "lowdiscrepancy"
+    "integer pixelsamples" [4] 
+
+
+WorldBegin
+
+AttributeBegin
+Translate 1 1 0
+LightSource "point" "color I" [ 6 6 6 ]
+AttributeEnd
+
+# floor 
+AttributeBegin
+Material "matte" "color Kd" [.4 .4 .4]
+Shape "trianglemesh" "point P" [ -2 0 -2  2 0 -2  2 0 2  -2 0 2 ]
+	"integer indices" [ 0 1 2 2 3 0]
+AttributeEnd
+
+# ceiling 
+AttributeBegin
+Material "matte" "color Kd" [.4 .4 .4]
+Shape "trianglemesh" "point P" [ -2 3 -2  2 3 -2  2 3 2  -2 3 2 ]
+	"integer indices" [ 0 1 2 2 3 0]
+AttributeEnd
+
+# right wall 
+AttributeBegin
+Material "matte" "color Kd" [.1 .4 .1]
+Shape "trianglemesh" "point P" [ -2 0 -2  -2 3 -2  -2 3 2  -2 0 2 ]
+	"integer indices" [ 0 1 2 2 3 0]
+AttributeEnd
+
+# left wall
+AttributeBegin
+Material "matte" "color Kd" [.4 .1 .1]
+Shape "trianglemesh" "point P" [ -2 0 -2  2 0 -2  2 3 -2  -2 3 -2 ]
+	"integer indices" [ 0 1 2 2 3 0]
+AttributeEnd
+
+# right wall opposite
+AttributeBegin
+Material "matte" "color Kd" [.1 .1 .4]
+Shape "trianglemesh" "point P" [ -2 0 2  2 0 2  2 3 2  -2 3 2 ]
+	"integer indices" [ 0 1 2 2 3 0]
+AttributeEnd
+
+# left wall opposite
+AttributeBegin
+Material "matte" "color Kd" [.4 .4 .1]
+Shape "trianglemesh" "point P" [ 2 0 -2  2 3 -2  2 3 2  2 0 2 ]
+	"integer indices" [ 0 1 2 2 3 0]
+AttributeEnd
+
+
+AttributeBegin
+
+    Translate 0 0.15 0
+
+    Texture "nmap" "spectrum" "glintsnormalmap"
+        "string filename" "textures/cuts.png"
+        "string mapping" "uv"
+        "float uscale" 20
+        "float vscale" 20
+    
+    Material "glints"
+        "texture normalmap" "nmap"
+        "spectrum eta" "spds/metals/Ag.eta.spd"
+        "spectrum k" "spds/metals/Ag.k.spd"
+        "float roughness" [0.01]
+        "float approxRoughness" [0.01]
+        
+    #Material "metal" 
+    #    "spectrum eta" "spds/metals/Au.eta.spd"
+    #    "spectrum k" "spds/metals/Au.k.spd"
+    #    "float roughness" [0.01]
+     
+    
+    Shape "sphere" "float radius" [0.15]
+    
+AttributeEnd
+    
+    
+#Material "measured" "string filename" "brdfs/mystique.brdf"
+#Include "geometry/bunny.pbrt"
+
+WorldEnd

@@ -53,8 +53,9 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         // set glints bxdfs to use or not use approximation distribution based on if the
         // path has been all specular bounces so far or not.
         // If yes, do not use approximation.
-        BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf, nonSpecularBounceOccurred,
-            dxToPixelCenter, dyToPixelCenter, footprintScale);
+        BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf,
+            useApproxOnFirstBounce || nonSpecularBounceOccurred,
+            dxToPixelCenter, dyToPixelCenter, 1.0f);// footprintScale);
 
         const LightSampleOffsets* lightSampleOffset = NULL;
         const BSDFSampleOffsets* bsdfSampleOffset = NULL;
@@ -154,6 +155,7 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
 GlintsPathIntegrator *CreateGlintsPathSurfaceIntegrator(const ParamSet &params,
     Film* film, Sampler* sampler) {
     int maxDepth = params.FindOneInt("maxdepth", 5);
+    bool useApproxOnFirstBounce = params.FindOneBool("useApproxOnFirstBounce", false);
     return new GlintsPathIntegrator(maxDepth, film->xResolution, film->yResolution,
-        sampler->samplesPerPixel);
+        sampler->samplesPerPixel, useApproxOnFirstBounce);
 }
