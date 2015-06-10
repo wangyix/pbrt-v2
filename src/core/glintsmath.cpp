@@ -255,20 +255,20 @@ Quadratic getErfIntervalApprox(int i, double* xfrom, double* xto) {
 // integral of exp(-x^2)
 double integral_expx2(double x0, double x1) {
     double ret = 0.5 * SQRT_PI * (erf(x1) - erf(x0));
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
 // inegral of exp(-x^2)*x
 double integral_expx2_x(double x0, double x1) {
     double ret = 0.5 * (exp(-x0*x0) - exp(-x1*x1));
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
 // integral of exp(-x^2)*x^2
 double integral_expx2_x2(double x0, double x1) {
     double ret = 0.25 * (SQRT_PI * (erf(x1) - erf(x0)))
         + 0.5 * (exp(-x0*x0)*x0 - exp(-x1*x1)*x1);
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
 
@@ -283,11 +283,11 @@ double integral_expx2_quad(const Quadratic& quad, double x0, double x1) {
     double ret = quad.a * integral_expx2_x2(x0, x1)
         + quad.b * integral_expx2_x(x0, x1)
         + quad.c * integral_expx2(x0, x1);
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
 
-// integral of exp(c)*quad2(x)
+// integral of exp(c)*quad(x)
 double integral_expc_quad(double n, const Quadratic& quad,
     double x0, double x1) {
     double a = quad.a;
@@ -298,11 +298,11 @@ double integral_expc_quad(double n, const Quadratic& quad,
         + 3 * b * (x0 + x1)
         + 6 * c
         );
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
 
-// integral of exp(-linear(x))*quad2(x)
+// integral of exp(-linear(x))*quad(x)
 double integral_explin_quad(const Linear& expLin, const Quadratic& quad,
     double x0, double x1) {
     if (expLin.a == 0.0)
@@ -314,18 +314,19 @@ double integral_explin_quad(const Linear& expLin, const Quadratic& quad,
     double m = expLin.a;
     double n = expLin.b;
     double ret = 1 / (m*m*m) * exp(-n)*(
-        exp(-m*x0) * (
-        a*((m*x0 + 1)*(m*x0 + 1) + 1)
-        + m*(b*m*x0 + b + c*m)
-        )
-        + exp(-m*x1) * (
-        -a*((m*x1 + 1)*(m*x1 + 1) + 1)
-        - m*(b*m*x1 + b + c*m)
-        )
+            exp(-m*x0) * (
+            a*((m*x0 + 1)*(m*x0 + 1) + 1)
+            + m*(b*m*x0 + b + c*m)
+            )
+            + exp(-m*x1) * (
+            -a*((m*x1 + 1)*(m*x1 + 1) + 1)
+            - m*(b*m*x1 + b + c*m)
+            )
         );
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
+
 // integral of exp(-quad1(x))*quad2(x)
 double integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
     double x0, double x1) {
@@ -353,7 +354,7 @@ double integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
     double y0 = y(x0), y1 = y(x1);
 
     double ret =  scale * integral_expx2_quad(yQuad, y0, y1);
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
 
@@ -368,32 +369,32 @@ double integral_expquad_erfx(const Quadratic& expQuad, double x0, double x1) {
     }
     int i = getErfIntervalIndex(x0);
     double xfrom, xto;
-    double sum = 0.0f;
+    double ret = 0.0f;
     Quadratic intervalApprox;
     while (true) {
         intervalApprox = getErfIntervalApprox(i, &xfrom, &xto);
         if (xto >= x1)
             break;
         // integrate from where we are now to the end of this interval
-        sum += integral_expquad_quad(expQuad, intervalApprox, x0, xto);
+        ret += integral_expquad_quad(expQuad, intervalApprox, x0, xto);
         x0 = xto;
         i++;
     }
     // integrate remainder of range
-    sum += integral_expquad_quad(expQuad, intervalApprox, x0, x1);
+    ret += integral_expquad_quad(expQuad, intervalApprox, x0, x1);
 
     if (boundsFlipped)
-        sum = -sum;
+        ret = -ret;
 
-    assert(!isnan(sum));
-    return sum;
+    assert(!isnan(ret) && !isinf(ret));
+    return ret;
 }
 
 // integral of exp(-quad(x))erf(constant)
 double integral_expquad_erfc(const Quadratic& expQuad, double c,
     double x0, double x1) {
     double ret = integral_expquad_quad(expQuad, Quadratic(0.0, 0.0, erf(c)), x0, x1);
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
 
@@ -413,7 +414,7 @@ double integral_expquad_erflin(const Quadratic& expQuad, const Linear& erfLin,
     double y0 = y(x0), y1 = y(x1);
 
     double ret = scale * integral_expquad_erfx(yExpQuad, y0, y1);
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
 
@@ -478,7 +479,7 @@ double integral_expquaduv(double cuu, double cuv, double cvv, double cu, double 
         integral_expquad_erflin(expQuadOutside, yL0, u0, u1)
         );
 
-    assert(!isnan(ret));
+    assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
 

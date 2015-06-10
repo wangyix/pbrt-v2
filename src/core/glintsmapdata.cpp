@@ -2,6 +2,11 @@
 #include "glintsmath.h"
 #include "reflection.h"
 
+// if true, then the normal texture is set to (s,t)=(0,0) everywhere, so that
+// D(s,t) simply becomes the roughness gaussian centered at (0,0).  This can
+// be computed analytically and will be compared to the numerically computed result
+#define TEST_ACCURACY 0
+
 
 #define INV_FOUR_PI_SQ 0.02533029591f
 #define sigxy 0.4472135955f     // sqrt(0.2)
@@ -26,10 +31,16 @@ GlintsMapData::GlintsMapData(const unsigned char* texels, int w, int h, int chan
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             const unsigned char* u = &texels[channels * (i*width + j)];
+#if TEST_ACCURACY
+            float s = 0.0;
+            float t = 0.0;
+#else
             float s = ((float)u[0] - 128.0) / 128.0;
             float t = ((float)u[1] - 128.0) / 128.0;
+#endif
             float z_sq = 1.0 - s*s - t*t;
             float z;
+
             if (z_sq > 0.0) {
                 z = sqrt(z_sq);
             } else {
@@ -209,13 +220,15 @@ float GlintsMapData::D(float s, float t, const GlintsPixelFootprint& footprint,
     float ret = recursiveD(s, t, stCullRadiusSq, roughness, pqc, dpq2dxy, xyCullRadiusSq,
         0, width, 0, height, stMinMaxTree.size() - 1);
 
-    /*if (s*s + t*t < stCullRadiusSq) {
-        printf("D(%f, %f) = %f\n", s, t, ret);
+#if TEST_ACCURACY
+    if (s*s + t*t < stCullRadiusSq) {
+        printf("Computed D(%f, %f) = %f\n", s, t, ret);
         float x_sq = s*s + t*t;
         float sig = roughness;
         float g = 1 / (sig*sig * (2.0*M_PI)) * exp(-x_sq / (2 * sig*sig));
-        printf("should be:  %f\n\n", g);
-    }*/
+        printf("        should be:   %f\n\n", g);
+    }
+#endif
     return ret;
 }
 

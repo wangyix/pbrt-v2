@@ -105,11 +105,10 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         BxDFType flags;
         Spectrum f = bsdf->Sample_f(wo, &wi, outgoingBSDFSample, &pdf,
             BxDFType(BSDF_ALL | BSDF_GLINTS), &flags);
-        if (f.IsBlack() || pdf == 0.)
+        if (f.IsBlack() || f.HasInfs() || pdf == 0. || isinf(pdf))
             break;
         specularBounce = (flags & BSDF_SPECULAR) != 0;
         pathThroughput *= f * AbsDot(wi, n) / pdf;
-        //ray = RayDifferential(p, wi, ray, isectp->rayEpsilon);
 
         // Possibly terminate the path
         if (bounces > 3) {
