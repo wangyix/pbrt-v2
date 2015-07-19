@@ -42,7 +42,7 @@ BSDF *GlintsMaterial::GetBSDF(const DifferentialGeometry &dgGeom,
     GlintsNormalMapDistribution *md = BSDF_ALLOC(arena, GlintsNormalMapDistribution)
         (fp, rough, normalMap->getMapData());
 
-    // PLACEHOLDER!!!!!!
+    // Blinn distribution used as an approximation
     float blinnExp = 1.0f / approxRoughness->Evaluate(dgs);
     MicrofacetDistribution* mdApprox = BSDF_ALLOC(arena, Blinn)(blinnExp);
 

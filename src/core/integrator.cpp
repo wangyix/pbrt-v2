@@ -342,25 +342,7 @@ Spectrum SpecularReflect(const RayDifferential &ray, BSDF *bsdf,
                                 BxDFType(BSDF_REFLECTION | BSDF_SPECULAR));
     Spectrum L = 0.f;
     if (pdf > 0.f && !f.IsBlack() && AbsDot(wi, n) != 0.f) {
-        // Compute ray differential _rd_ for specular reflection
-        /*RayDifferential rd(p, wi, ray, isect.rayEpsilon);
-        if (ray.hasDifferentials) {
-            rd.hasDifferentials = true;
-            rd.rxOrigin = p + isect.dg.dpdx;
-            rd.ryOrigin = p + isect.dg.dpdy;
-            // Compute differential reflected directions
-            Normal dndx = bsdf->dgShading.dndu * bsdf->dgShading.dudx +
-                          bsdf->dgShading.dndv * bsdf->dgShading.dvdx;
-            Normal dndy = bsdf->dgShading.dndu * bsdf->dgShading.dudy +
-                          bsdf->dgShading.dndv * bsdf->dgShading.dvdy;
-            Vector dwodx = -ray.rxDirection - wo, dwody = -ray.ryDirection - wo;
-            float dDNdx = Dot(dwodx, n) + Dot(wo, dndx);
-            float dDNdy = Dot(dwody, n) + Dot(wo, dndy);
-            rd.rxDirection = wi - dwodx + 2 * Vector(Dot(wo, n) * dndx +
-                                                     dDNdx * n);
-            rd.ryDirection = wi - dwody + 2 * Vector(Dot(wo, n) * dndy +
-                                                     dDNdy * n);
-        }*/
+
         RayDifferential rd = SpecularReflectRayDifferential(ray, bsdf, wi, isect);
 
         PBRT_STARTED_SPECULAR_REFLECTION_RAY(const_cast<RayDifferential *>(&rd));

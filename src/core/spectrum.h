@@ -235,6 +235,13 @@ public:
         Assert(!ret.HasNaNs());
         return ret;
     }
+    CoefficientSpectrum ClampInfs(float high) const {
+        CoefficientSpectrum ret;
+        for (int i = 0; i < nSamples; ++i)
+            ret.c[i] = isinf(c[i]) ? high : c[i];
+        Assert(!ret.HasNaNs());
+        return ret;
+    }
     bool HasNaNs() const {
         for (int i = 0; i < nSamples; ++i)
             if (isnan(c[i])) return true;

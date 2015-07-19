@@ -54,6 +54,7 @@ Spectrum GlintsDirectLightingIntegrator::Li(const Scene *scene,
         L += SpecularTransmit(ray, bsdf, rng, isect, renderer, scene, sample,
             arena);
     }
+    L = L.ClampInfs(1000000.0f);
     return L;
 }
 
