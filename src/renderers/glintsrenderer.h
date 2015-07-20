@@ -35,8 +35,10 @@ private:
     SurfaceIntegrator* pathSurfIntegrator;
     VolumeIntegrator* pathVolIntegrator;
     
-    GlintsPassRenderer* firstRenderer;
-    GlintsPassRenderer* secondRenderer;
+    GlintsPassRenderer* directRenderer;
+    GlintsPassRenderer* pathRenderer;
+    bool disableDirectRenderer;
+    bool disablePathRenderer;
 };
 
 #endif // PBRT_RENDERERS_GLINTSRENDERER_H

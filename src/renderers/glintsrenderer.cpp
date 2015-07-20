@@ -13,6 +13,8 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
     
     camera = c;
     
+    disableDirectRenderer = rendererParams.FindOneBool("disableDirectRenderer", false);
+    disablePathRenderer = rendererParams.FindOneBool("disablePathRenderer", false);
 
     // direct lighting renderer will splat its samples.  This works since we're only using
     // one sample per pixel, which means this sample contribution does not need to be weighted
@@ -25,7 +27,7 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
 
     directVolIntegrator = directVi;
 
-    firstRenderer = new GlintsPassRenderer(directSampler, camera, directSurfIntegrator, directVolIntegrator,
+    directRenderer = new GlintsPassRenderer(directSampler, camera, directSurfIntegrator, directVolIntegrator,
         true, "Rendering glints direct lighting");
 
 
@@ -36,7 +38,7 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
 
     pathVolIntegrator = pathVi;
 
-    secondRenderer = new GlintsPassRenderer(pathSampler, camera, pathSurfIntegrator, pathVolIntegrator,
+    pathRenderer = new GlintsPassRenderer(pathSampler, camera, pathSurfIntegrator, pathVolIntegrator,
         false, "Rendering all other paths");
 }
 
@@ -49,14 +51,13 @@ GlintsRenderer::~GlintsRenderer() {
     delete pathSurfIntegrator;
     delete pathVolIntegrator;
 
-    delete firstRenderer;
-    delete secondRenderer;
+    delete directRenderer;
+    delete pathRenderer;
 }
 
 void GlintsRenderer::Render(const Scene *scene) {
-    secondRenderer->Render(scene);
-    firstRenderer->Render(scene);
-    //secondRenderer->Render(scene);
+    if (!disableDirectRenderer) directRenderer->Render(scene);
+    if (!disablePathRenderer) pathRenderer->Render(scene);
     camera->film->WriteImage();
 }
 
