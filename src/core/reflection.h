@@ -448,10 +448,12 @@ struct GlintsPixelFootprint {
 
 
 struct GlintsDstParams {
-    GlintsPixelFootprint footprint;
+    GlintsDstParams()
+        : footprint(), s(0.0f), t(0.0f) {}
     bool matches(float ss, float tt, const GlintsPixelFootprint& fp) const;
     void setTo(float ss, float tt, const GlintsPixelFootprint& fp);
 
+    GlintsPixelFootprint footprint;
     float s, t;
 };
 
