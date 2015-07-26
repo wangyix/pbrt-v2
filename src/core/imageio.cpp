@@ -111,9 +111,9 @@ void WriteImage(const string &name, float *pixels, float *alpha, int xRes,
             for (int y = 0; y < yRes; ++y) {
                 for (int x = 0; x < xRes; ++x) {
 #define TO_BYTE(v) (uint8_t(Clamp(255.f * powf((v), 1.f/2.2f), 0.f, 255.f)))
-                    dst[0] = TO_BYTE(pixels[3*(y*xRes+x)+2]);
+                    dst[0] = TO_BYTE(pixels[3*(y*xRes+x)+0]);
                     dst[1] = TO_BYTE(pixels[3*(y*xRes+x)+1]);
-                    dst[2] = TO_BYTE(pixels[3*(y*xRes+x)+0]);
+                    dst[2] = TO_BYTE(pixels[3*(y*xRes+x)+2]);
 #undef TO_BYTE
                     dst += 3;
                 }

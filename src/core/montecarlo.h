@@ -125,7 +125,6 @@ Vector UniformSampleCone(float u1, float u2, float thetamax,
 float  UniformConePdf(float thetamax);
 void UniformSampleDisk(float u1, float u2, float *x, float *y);
 void ConcentricSampleDisk(float u1, float u2, float *dx, float *dy);
-void SampleDiskGaussian(float *x, float *y, RNG &rng);
 void SampleDiskGaussian(float u1, float u2, float *x, float *y);
 inline Vector CosineSampleHemisphere(float u1, float u2) {
     Vector ret;
