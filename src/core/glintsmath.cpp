@@ -4,7 +4,7 @@
 #include "glintsmath.h"
 
 
-#define SQRT_PI    1.7724538509055159f
+#define SQRT_PI    1.7724538509055159
 
 #define ERF_HI_ACCR 0
 
@@ -19,7 +19,7 @@ double erfQuadCoeffs[ERF_INTERVALS][3] = {
     { 0.0077718428863119277, 0.043514858915608634, -0.9393799187329831 },
     { 0.18837446996390575, 0.71774488196095576, -0.31333038095266502 },
     { 0.39659792535275584, 1.2392987183024708, 0 },
-    { -0.39659792535275645, 1.2392987183024713, -4.3340321149696856e-17 },
+    { -0.39659792535275645, 1.2392987183024713, 0 },
     { -0.18837446996390733, 0.71774488196095954, 0.31333038095266313 },
     { -0.0077718428863113058, 0.04351485891560556, 0.93937991873298676 }
 };
@@ -37,7 +37,7 @@ double erfQuadCoeffs[ERF_INTERVALS][3] = {
     { 0.43606665548198542, 1.2902452404905687, 0.011240803005794546 },
     { 0.45619726425381479, 1.3319918535353887, 0.031227295355255629 },
     { 0.2007956577269949, 1.152943463473816, 0 },
-    { -0.20079565772699451, 1.1529434634738156, 7.168330766004533e-17 },
+    { -0.20079565772699451, 1.1529434634738156, 0 },
     { -0.45619726425381718, 1.3319918535353912, -0.031227295355256247 },
     { -0.43606665548197004, 1.2902452404905396, -0.011240803005781086 },
     { -0.26515585771746258, 0.90327923257128129, 0.20778697748267971 },
@@ -246,47 +246,6 @@ Quadratic getErfIntervalApprox(int i, double* xfrom, double* xto) {
 }
 
 
-
-
-
-
-
-
-// integral of exp(-x^2)
-double integral_expx2(double x0, double x1) {
-    double ret = 0.5 * SQRT_PI * (erf(x1) - erf(x0));
-    assert(!isnan(ret) && !isinf(ret));
-    return ret;
-}
-// inegral of exp(-x^2)*x
-double integral_expx2_x(double x0, double x1) {
-    double ret = 0.5 * (exp(-x0*x0) - exp(-x1*x1));
-    assert(!isnan(ret) && !isinf(ret));
-    return ret;
-}
-// integral of exp(-x^2)*x^2
-double integral_expx2_x2(double x0, double x1) {
-    double ret = 0.25 * (SQRT_PI * (erf(x1) - erf(x0)))
-        + 0.5 * (exp(-x0*x0)*x0 - exp(-x1*x1)*x1);
-    assert(!isnan(ret) && !isinf(ret));
-    return ret;
-}
-
-
-
-
-
-
-
-// integral of exp(-x^2)*quad(x)
-double integral_expx2_quad(const Quadratic& quad, double x0, double x1) {
-    double ret = quad.a * integral_expx2_x2(x0, x1)
-        + quad.b * integral_expx2_x(x0, x1)
-        + quad.c * integral_expx2(x0, x1);
-    assert(!isnan(ret) && !isinf(ret));
-    return ret;
-}
-
 // integral of exp(c)*quad(x)
 double integral_expc_quad(double n, const Quadratic& quad,
     double x0, double x1) {
@@ -330,30 +289,30 @@ double integral_explin_quad(const Linear& expLin, const Quadratic& quad,
 // integral of exp(-quad1(x))*quad2(x)
 double integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
     double x0, double x1) {
-
-    //assert(expQuad.a >= 0.0);
-
     // if we get coefficient a < 0 due to rounding error, just clamp it
     // to 0.
     if (expQuad.a <= 0.0f) {
         Linear expLin(expQuad.b, expQuad.c);
         return integral_explin_quad(expLin, quad, x0, x1);
     }
+    
+    double a = expQuad.a;
+    double b = expQuad.b;
+    double c = expQuad.c;
+    double p = quad.a;
+    double q = quad.b;
+    double r = quad.c;
 
-    // complete the square on the exp quadratic to express it as 
-    // y^2 + r = ax^2+bx+c
-    Linear y;
-    double r;
-    expQuad.completeTheSquare(&y, &r);
+    double sqrt_a = sqrt(a);
+    double exp_quad_x0 = exp(-expQuad(x0));
+    double exp_quad_x1 = exp(-expQuad(x1));
+    double ret =
+        SQRT_PI * exp(b*b/(4.0*a) - c)
+                * (erf(sqrt_a*x1 + b/(2*sqrt_a)) - erf(sqrt_a*x0 + b/(2*sqrt_a)))
+                * (r/(2*sqrt_a) + (p-q*b)/(4*a*sqrt_a) + p*b*b/(8*a*a*sqrt_a))
+        + (exp_quad_x1 - exp_quad_x0) * (-q/(2*a) + p*b/(4*a*a))
+        + (x1*exp_quad_x1 - x0*exp_quad_x0) * (-p/(2*a));
 
-    // rewrite integral in terms of y:
-    // exp(-y^2-r)*yQuad(y)*1/y.a dy = exp(-r)/y.a * exp(-y^2)*yQuad(y)
-    Quadratic yQuad = quad.changeVar(y);
-    double dydx = y.a;
-    double scale = exp(-r) / dydx; // take constants outside
-    double y0 = y(x0), y1 = y(x1);
-
-    double ret =  scale * integral_expx2_quad(yQuad, y0, y1);
     assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
