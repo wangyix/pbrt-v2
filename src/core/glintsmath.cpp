@@ -306,6 +306,7 @@ double integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
     double sqrt_a = sqrt(a);
     double exp_quad_x0 = exp(-expQuad(x0));
     double exp_quad_x1 = exp(-expQuad(x1));
+
     double ret =
         SQRT_PI * exp(b*b/(4.0*a) - c)
                 * (erf(sqrt_a*x1 + b/(2*sqrt_a)) - erf(sqrt_a*x0 + b/(2*sqrt_a)))
@@ -313,6 +314,20 @@ double integral_expquad_quad(const Quadratic& expQuad, const Quadratic& quad,
         + (exp_quad_x1 - exp_quad_x0) * (-q/(2*a) + p*b/(4*a*a))
         + (x1*exp_quad_x1 - x0*exp_quad_x0) * (-p/(2*a));
 
+    assert(!isnan(ret) && !isinf(ret));
+    return ret;
+}
+
+double integral_expquad_quad_conditioned(const Quadratic& expQuad, const Quadratic& quad,
+    double x0, double x1) {
+
+    Linear y(sqrt(expQuad.a), sqrt(expQuad.c));
+    Quadratic yExpQuad = expQuad.changeVar(y);
+    Quadratic yQuad = quad.changeVar(y);
+    double dydx = y.a;
+    double scale = 1 / dydx;
+    double y0 = y(x0), y1 = y(x1);
+    double ret = scale * integral_expquad_quad(yExpQuad, yQuad, y0, y1);
     assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
@@ -335,12 +350,12 @@ double integral_expquad_erfx(const Quadratic& expQuad, double x0, double x1) {
         if (xto >= x1)
             break;
         // integrate from where we are now to the end of this interval
-        ret += integral_expquad_quad(expQuad, intervalApprox, x0, xto);
+        ret += integral_expquad_quad_conditioned(expQuad, intervalApprox, x0, xto);
         x0 = xto;
         i++;
     }
     // integrate remainder of range
-    ret += integral_expquad_quad(expQuad, intervalApprox, x0, x1);
+    ret += integral_expquad_quad_conditioned(expQuad, intervalApprox, x0, x1);
 
     if (boundsFlipped)
         ret = -ret;
@@ -352,7 +367,7 @@ double integral_expquad_erfx(const Quadratic& expQuad, double x0, double x1) {
 // integral of exp(-quad(x))erf(constant)
 double integral_expquad_erfc(const Quadratic& expQuad, double c,
     double x0, double x1) {
-    double ret = integral_expquad_quad(expQuad, Quadratic(0.0, 0.0, erf(c)), x0, x1);
+    double ret = integral_expquad_quad_conditioned(expQuad, Quadratic(0.0, 0.0, erf(c)), x0, x1);
     assert(!isnan(ret) && !isinf(ret));
     return ret;
 }
