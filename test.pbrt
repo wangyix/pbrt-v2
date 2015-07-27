@@ -1,11 +1,19 @@
 Film "image"
-	"integer xresolution" [320] "integer yresolution" [240] 
+	"integer xresolution" [1280] "integer yresolution" [960] 
 LookAt 0.3 0.27 0.4  0 .12 0  0 1 0
 Camera "perspective" "float fov" [60]
 
 Renderer "glints"
-Sampler "lowdiscrepancy"
-    "integer pixelsamples" [4] 
+    "bool useApproxOnFirstBounce" "false"
+    "bool disableDirectRenderer" "false"
+    "bool disablePathRenderer" "false"
+    #"integer maxdepth" 6
+
+#Renderer "sampler"
+#SurfaceIntegrator "path"
+
+Sampler "random"
+    "integer pixelsamples" [1] 
 
 
 WorldBegin
@@ -70,17 +78,17 @@ AttributeBegin
     
     Material "glints"
         "texture normalmap" "nmap"
-        "spectrum eta" "spds/metals/Ag.eta.spd"
-        "spectrum k" "spds/metals/Ag.k.spd"
+        "spectrum eta" "spds/metals/Au.eta.spd"
+        "spectrum k" "spds/metals/Au.k.spd"
         "float roughness" [0.01]
-        "float approxRoughness" [0.01]
+        "float approxRoughness" [0.001]
         
     #Material "metal" 
     #    "spectrum eta" "spds/metals/Au.eta.spd"
     #    "spectrum k" "spds/metals/Au.k.spd"
     #    "float roughness" [0.01]
      
-    
+    #Rotate 45  0 1 0
     Shape "sphere" "float radius" [0.15]
     
 AttributeEnd
