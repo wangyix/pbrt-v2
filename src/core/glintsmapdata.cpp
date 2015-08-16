@@ -215,6 +215,9 @@ float GlintsMapData::D(float s, float t, const GlintsPixelFootprint& footprint,
     Matrix2f B;                         // (dx,dy) to (dp,dq)
     B << footprint.dudx * width, footprint.dudy * width,
         footprint.dvdx * height, footprint.dvdy * height;
+    if (abs(B.determinant()) < 0.000000001) {
+        return 0.0;
+    }
     Matrix2f dpq2dxy = B.inverse();     // (dp,dq) to (dx,dy)
 
     float ret = recursiveD(s, t, stCullRadiusSq, roughness, pqc, dpq2dxy, xyCullRadiusSq,
