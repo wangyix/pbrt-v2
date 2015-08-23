@@ -219,6 +219,22 @@ float GlintsMapData::D(float s, float t, const GlintsPixelFootprint& footprint,
     float ret = recursiveD(s, t, stCullRadius, roughness, pqc, dpq2dxy, xyCullRadius,
         0, width, 0, height, stMinMaxTree.size() - 1);
 
+    // A footprint right near the edge/corner of the texture will have some of its area outside the boundaries
+    // of this texture. Since we're assuming the texture is tiled, we want to integrate this footprint over
+    // adjacent tiles of this texture so the entire area of the footprint is integrated over.  Instead of
+    // shifting the whole texture to a different tile, we simply shift the footprint center in the opposite
+    // direction, and integrate over the shifted footprint without shifting the texture.
+    bool inRightHalf = footprint.u >= 0.5;
+    bool inBottomHalf = footprint.v >= 0.5;
+    float pShift = inRightHalf ? -width : width;
+    float qShift = inBottomHalf ? -height : height;
+    ret += recursiveD(s, t, stCullRadius, roughness, Vector2f(pqc(0) + pShift, pqc(1)), dpq2dxy, xyCullRadius,
+        0, width, 0, height, stMinMaxTree.size() - 1);
+    ret += recursiveD(s, t, stCullRadius, roughness, Vector2f(pqc(0), pqc(1) + qShift), dpq2dxy, xyCullRadius,
+        0, width, 0, height, stMinMaxTree.size() - 1);
+    ret += recursiveD(s, t, stCullRadius, roughness, Vector2f(pqc(0) + pShift, pqc(1) + qShift), dpq2dxy, xyCullRadius,
+        0, width, 0, height, stMinMaxTree.size() - 1);
+
 #if TEST_ACCURACY
     if (s*s + t*t < stCullRadius * stCullRadius) {
         printf("Computed D(%f, %f) = %f\n", s, t, ret);
