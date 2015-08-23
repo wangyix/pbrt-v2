@@ -16,10 +16,9 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
     disableDirectRenderer = rendererParams.FindOneBool("disableDirectRenderer", false);
     disablePathRenderer = rendererParams.FindOneBool("disablePathRenderer", false);
 
-    // direct lighting renderer will splat its samples.  This works since we're only using
-    // one sample per pixel, which means this sample contribution does not need to be weighted
-    // and can simply be added to the film pixel.
-    directSampler = CreatePixelCentersSampler(camera->film, camera);
+    // direct lighting renderer will splat its samples.
+    int directSamplesPerPixel = rendererParams.FindOneInt("directSamplesPerPixel", 1);
+    directSampler = CreatePixelCentersSampler(directSamplesPerPixel, camera->film, camera);
     if (!directSampler) Severe("Unable to create pixel centers sampler.");
 
     directSurfIntegrator = CreateGlintsDirectLightingIntegrator(rendererParams);
@@ -28,7 +27,7 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
     directVolIntegrator = directVi;
 
     directRenderer = new GlintsPassRenderer(directSampler, camera, directSurfIntegrator, directVolIntegrator,
-        true, "Rendering glints direct lighting");
+        true, 1.0f / directSampler->samplesPerPixel, "Rendering glints direct lighting");
 
 
     pathSampler = pathS;
@@ -39,7 +38,7 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
     pathVolIntegrator = pathVi;
 
     pathRenderer = new GlintsPassRenderer(pathSampler, camera, pathSurfIntegrator, pathVolIntegrator,
-        false, "Rendering all other paths");
+        false, 1.0f, "Rendering all other paths");
 }
 
 GlintsRenderer::~GlintsRenderer() {

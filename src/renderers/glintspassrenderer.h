@@ -17,7 +17,7 @@ class GlintsPassRenderer : public Renderer {
 public:
     // GlintsPassRenderer Public Methods
     GlintsPassRenderer(Sampler *s, Camera *c, SurfaceIntegrator* integrator,
-        VolumeIntegrator *vi, bool splat, string prString = "Rendering");
+        VolumeIntegrator *vi, bool splat, float splatScale, string prString = "Rendering");
     ~GlintsPassRenderer();
 
     void Render(const Scene *scene);
@@ -34,6 +34,7 @@ private:
     SurfaceIntegrator* surfaceIntegrator;
     VolumeIntegrator* volumeIntegrator;
     const bool splatSamples;
+    const float splatSamplesScale;
     string reporterString;
 };
 
@@ -45,8 +46,8 @@ public:
     // GlintsPassRendererTask Public Methods
     GlintsPassRendererTask(const Scene *sc, Renderer *ren, Camera *c,
         ProgressReporter &pr, Sampler *ms, Sample *sam,
-        int tn, int tc, bool splat)
-        : reporter(pr), splatSamples(splat)
+        int tn, int tc, bool splat, float splatScale)
+        : reporter(pr), splatSamples(splat), splatSamplesScale(splatScale)
     {
         scene = sc; renderer = ren; camera = c; mainSampler = ms;
         origSample = sam; taskNum = tn; taskCount = tc;
@@ -62,6 +63,7 @@ private:
     Sample *origSample;
     int taskNum, taskCount;
     const bool splatSamples;
+    const float splatSamplesScale;
 };
 
 

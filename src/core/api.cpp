@@ -644,8 +644,10 @@ Sampler *MakeSampler(const string &name,
         sampler = CreateRandomSampler(paramSet, film, camera);
     else if (name == "stratified")
         sampler = CreateStratifiedSampler(paramSet, film, camera);
-    else if (name == "pixelcenters")
-        sampler = CreatePixelCentersSampler(film, camera);
+    else if (name == "pixelcenters") {
+        int ns = paramSet.FindOneInt("pixelsamples", 1);
+        sampler = CreatePixelCentersSampler(ns, film, camera);
+    }
     else
         Warning("Sampler \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();

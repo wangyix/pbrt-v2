@@ -3,20 +3,36 @@
 #include "montecarlo.h"
 #include "camera.h"
 
-#define nSamples 1
-
 PixelCentersSampler::PixelCentersSampler(int xstart, int xend,
-    int ystart, int yend, float sopen, float sclose)
-    : Sampler(xstart, xend, ystart, yend, nSamples, sopen, sclose) {
+    int ystart, int yend, int ns, float sopen, float sclose)
+    : Sampler(xstart, xend, ystart, yend, ns, sopen, sclose) {
     xPos = xPixelStart;
     yPos = yPixelStart;
+    nSamples = ns;
+    
+    // Make sure nSamples is a square number
+    nSamplesSqrt = Round2Int(sqrtf(nSamples));
+    assert(nSamplesSqrt * nSamplesSqrt == nSamples);
+
     // Get storage for a pixel's worth of stratified samples
-    lensSamples = AllocAligned<float>(3 * nSamples);
+    imageSamples = AllocAligned<float>(5 * nSamples);
+    lensSamples = imageSamples + 2 * nSamples;
     timeSamples = lensSamples + 2 * nSamples;
 
+    // Generate random values for lens samples and time samples
     RNG rng(xstart + ystart * (xend - xstart));
     for (int i = 0; i < 3 * nSamples; ++i)
         lensSamples[i] = rng.RandomFloat();
+
+    // Generate subpixel centers for image samples
+    int k = 0;
+    for (int i = 0; i < nSamplesSqrt; ++i) {
+        for (int j = 0; j < nSamplesSqrt; ++j) {
+            imageSamples[k] = xPos + (j + 0.5f) / nSamplesSqrt;
+            imageSamples[k + 1] = yPos + (i + 0.5f) / nSamplesSqrt;
+            k += 2;
+        }
+    }
 
     samplePos = 0;
 }
@@ -27,7 +43,7 @@ Sampler *PixelCentersSampler::GetSubSampler(int num, int count) {
     int x0, x1, y0, y1;
     ComputeSubWindow(num, count, &x0, &x1, &y0, &y1);
     if (x0 == x1 || y0 == y1) return NULL;
-    return new PixelCentersSampler(x0, x1, y0, y1, shutterOpen, shutterClose);
+    return new PixelCentersSampler(x0, x1, y0, y1, nSamples, shutterOpen, shutterClose);
 }
 
 
@@ -43,14 +59,25 @@ int PixelCentersSampler::GetMoreSamples(Sample *sample, RNG &rng) {
         if (yPos == yPixelEnd)
             return 0;
 
+        // Generate random values for lens samples and time samples
         for (int i = 0; i < 3 * nSamples; ++i)
             lensSamples[i] = rng.RandomFloat();
+
+        // Generate subpixel centers for image samples
+        int k = 0;
+        for (int i = 0; i < nSamplesSqrt; ++i) {
+            for (int j = 0; j < nSamplesSqrt; ++j) {
+                imageSamples[k] = xPos + (j + 0.5f) / nSamplesSqrt;
+                imageSamples[k + 1] = yPos + (i + 0.5f) / nSamplesSqrt;
+                k += 2;
+            }
+        }
         
         samplePos = 0;
     }
     // Return next \mono{PixelCentersSampler} sample point
-    sample->imageX = xPos + 0.5f;
-    sample->imageY = yPos + 0.5f;
+    sample->imageX = imageSamples[2*samplePos];
+    sample->imageY = imageSamples[2*samplePos + 1];
     sample->lensU = lensSamples[2*samplePos + 0];
     sample->lensV = lensSamples[2*samplePos + 1];
     sample->time = Lerp(timeSamples[samplePos], shutterOpen, shutterClose);
@@ -67,10 +94,11 @@ int PixelCentersSampler::GetMoreSamples(Sample *sample, RNG &rng) {
 
 
 
-PixelCentersSampler *CreatePixelCentersSampler(const Film *film, const Camera *camera) {
+PixelCentersSampler *CreatePixelCentersSampler(int ns,
+                                               const Film *film, const Camera *camera) {
     int xstart, xend, ystart, yend;
     film->GetSampleExtent(&xstart, &xend, &ystart, &yend);
-    return new PixelCentersSampler(xstart, xend, ystart, yend,
+    return new PixelCentersSampler(xstart, xend, ystart, yend, ns,
         camera->shutterOpen, camera->shutterClose);
 }
 

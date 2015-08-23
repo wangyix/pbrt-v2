@@ -80,7 +80,7 @@ void GlintsPassRendererTask::Run() {
             {
                 PBRT_STARTED_ADDING_IMAGE_SAMPLE(&samples[i], &rays[i], &Ls[i], &Ts[i]);
                 if (splatSamples)
-                    camera->film->Splat(samples[i], Ls[i]);
+                    camera->film->Splat(samples[i], splatSamplesScale * Ls[i]);
                 else
                     camera->film->AddSample(samples[i], Ls[i]);
                 PBRT_FINISHED_ADDING_IMAGE_SAMPLE();
@@ -108,8 +108,8 @@ void GlintsPassRendererTask::Run() {
 
 // GlintsPassRenderer Method Definitions
 GlintsPassRenderer::GlintsPassRenderer(Sampler *s, Camera *c,
-    SurfaceIntegrator *si, VolumeIntegrator *vi, bool splat, string prString) 
-    : splatSamples(splat)
+    SurfaceIntegrator *si, VolumeIntegrator *vi, bool splat, float splatScale, string prString) 
+    : splatSamples(splat), splatSamplesScale(splatScale)
 {
     sampler = s;
     camera = c;
@@ -153,7 +153,7 @@ void GlintsPassRenderer::Render(const Scene *scene) {
         renderTasks.push_back(new GlintsPassRendererTask(scene, this, camera,
             reporter, sampler, sample,
             nTasks - 1 - i, nTasks,
-            splatSamples));
+            splatSamples, splatSamplesScale));
     EnqueueTasks(renderTasks);
     WaitForAllTasks();
     for (uint32_t i = 0; i < renderTasks.size(); ++i)
