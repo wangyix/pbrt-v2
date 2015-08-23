@@ -205,11 +205,7 @@ float GlintsMapData::D(float s, float t, const GlintsPixelFootprint& footprint,
     */
 
     const float xyCullRadius = CULL_RADIUS_STDS * sigxy;
-    const float xyCullRadiusSq = xyCullRadius * xyCullRadius;
-
     const float stCullRadius = CULL_RADIUS_STDS * roughness;
-    const float stCullRadiusSq = stCullRadius * stCullRadius;
-    
 
     Vector2f pqc(footprint.u * width, footprint.v * height); // footprint center
     Matrix2f B;                         // (dx,dy) to (dp,dq)
@@ -220,11 +216,11 @@ float GlintsMapData::D(float s, float t, const GlintsPixelFootprint& footprint,
     }
     Matrix2f dpq2dxy = B.inverse();     // (dp,dq) to (dx,dy)
 
-    float ret = recursiveD(s, t, stCullRadiusSq, roughness, pqc, dpq2dxy, xyCullRadiusSq,
+    float ret = recursiveD(s, t, stCullRadius, roughness, pqc, dpq2dxy, xyCullRadius,
         0, width, 0, height, stMinMaxTree.size() - 1);
 
 #if TEST_ACCURACY
-    if (s*s + t*t < stCullRadiusSq) {
+    if (s*s + t*t < stCullRadius * stCullRadius) {
         printf("Computed D(%f, %f) = %f\n", s, t, ret);
         float x_sq = s*s + t*t;
         float sig = roughness;
@@ -235,13 +231,105 @@ float GlintsMapData::D(float s, float t, const GlintsPixelFootprint& footprint,
     return ret;
 }
 
+// returns whether or not a circle will intersect an AABB.
+// used for intersecting the cull radius around (s,t) and the STMinMax of a texture subregion
+static bool circleAABBIntersect(float ox, float oy, float r,
+                                float xmin, float xmax, float ymin, float ymax) {
+    bool xInsidePadded = xmin - r <= ox && ox <= xmax + r;
+    bool yInsidePadded = ymin - r <= oy && oy <= ymax + r;
+    // if center is outside rect padded by r on all sides, then no intersection
+    if (!xInsidePadded && !yInsidePadded) {
+        return false;
+    }
+    // check if center is inside rect padded by width r on left and right
+    if (xInsidePadded && ymin <= oy && oy <= ymax) {
+        return true;
+    }
+    // check if center is inside rect padded by height r on top and bottom
+    if (yInsidePadded && xmin <= ox && ox <= xmax) {
+        return true;
+    }
+    // check if center is within radius of any of the 4 corners
+    Vector2f O(ox, oy);
+    float rSq = r * r;
+    return ((O - Vector2f(xmin, ymin)).squaredNorm() <= rSq
+            || (O - Vector2f(xmin, ymax)).squaredNorm() <= rSq
+            || (O - Vector2f(xmax, ymin)).squaredNorm() <= rSq
+            || (O - Vector2f(xmax, ymax)).squaredNorm() <= rSq);
+}
 
+// returns whether or not a pixel footprint on the texture will intersect with a texture subregion
+static bool footprintTextureAABBIntersect(float pc, float qc, float xyRad, const Matrix2f pq2xy,
+                                          float pmin, float pmax, float qmin, float qmax) {
+    // check if center is inside rect in pq space
+    if (pmin <= pc && pc <= pmax && qmin <= qc && qc <= qmax) {
+        return true;
+    }
+    // compute vectors from corners of parallelogram to center in xy space
+    Vector2f BLtoCenter_xy = pq2xy * Vector2f(pc - pmin, qc - qmin);
+    Vector2f BRtoCenter_xy = pq2xy * Vector2f(pc - pmax, qc - qmin);
+    Vector2f TLtoCenter_xy = pq2xy * Vector2f(pc - pmin, qc - qmax);
+    Vector2f TRtoCenter_xy = pq2xy * Vector2f(pc - pmax, qc - qmax);
 
+    // check if center is within radius of any of the 4 corners in xy space
+    float xyRadSq = xyRad * xyRad;
+    if (BLtoCenter_xy.squaredNorm() <= xyRadSq
+        || BRtoCenter_xy.squaredNorm() <= xyRadSq
+        || TLtoCenter_xy.squaredNorm() <= xyRadSq
+        || TRtoCenter_xy.squaredNorm() <= xyRadSq) {
+        return true;
+    }
+
+    // calculate vector A, which is (pmax-pmin, 0) transformed to xy space
+    // calculate vector normal to A of length xyRad; construct space with axes A and An
+    Vector2f A = (pmax - pmin) * pq2xy.col(0);
+    Vector2f An(-A(1), A(1));       // points "upwards"
+    An = (xyRad / An.norm())* An;
+    Matrix2f AAn2xy;
+    AAn2xy.col(0) = A;
+    AAn2xy.col(1) = An;
+    Matrix2f xy2AAn = AAn2xy.inverse();
+    // check if center is inside bottom A bar
+    Vector2f BLtoCenter_AAn = xy2AAn * BLtoCenter_xy;
+    if (0.0 <= BLtoCenter_AAn(0) && BLtoCenter_AAn(0) <= 1.0 &&
+        -1.0 <= BLtoCenter_AAn(1) && BLtoCenter_AAn(1) <= 1.0) {
+        return true;
+    }
+    // check if center is inside top A bar
+    Vector2f TLtoCenter_AAn = xy2AAn * TLtoCenter_xy;
+    if (0.0 <= TLtoCenter_AAn(0) && TLtoCenter_AAn(0) <= 1.0 &&
+        -1.0 <= TLtoCenter_AAn(1) && TLtoCenter_AAn(1) <= 1.0) {
+        return true;
+    }
+
+    // calculate vector B, which is (0, qmax-qmin) transformed to xy space
+    // calculate vector normal to B of length xyRad; construct space with axes B and Bn
+    Vector2f B = (qmax - qmin) * pq2xy.col(1);
+    Vector2f Bn(B(1), -B(0));       // points "rightwards"
+    Bn = (xyRad / Bn.norm()) * Bn;
+    Matrix2f BBn2xy;
+    BBn2xy.col(0) = B;
+    BBn2xy.col(1) = Bn;
+    Matrix2f xy2BBn = BBn2xy.inverse();
+    // check if center is inside left B bar
+    Vector2f BLtoCenter_BBn = xy2BBn * BLtoCenter_xy;
+    if (0.0 <= BLtoCenter_BBn(0) && BLtoCenter_BBn(0) <= 1.0 &&
+        -1.0 <= BLtoCenter_BBn(1) && BLtoCenter_BBn(1) <= 1.0) {
+        return true;
+    }
+    // check if center is inside right B bar
+    Vector2f BRtoCenter_BBn = xy2BBn * BLtoCenter_xy;
+    if (0.0 <= BRtoCenter_BBn(0) && BRtoCenter_BBn(0) <= 1.0 &&
+        -1.0 <= BRtoCenter_BBn(1) && BRtoCenter_BBn(1) <= 1.0) {
+        return true;
+    }
+    return false;
+}
 
 // integrates G over texel triangles in a sub-region of the texture
 // from,to indices refer to cells, or alternatively the top-left texel of the cell
-float GlintsMapData::recursiveD(float s, float t, float stCullRadiusSq, float roughness,
-    const Vector2f& pqc, const Matrix2f& dpq2dxy, float xyCullRadiusSq,
+float GlintsMapData::recursiveD(float s, float t, float stCullRadius, float roughness,
+    const Vector2f& pqc, const Matrix2f& dpq2dxy, float xyCullRadius,
     int pfrom, int pto, int qfrom, int qto, int level) const {
 
     int dim = pto - pfrom;
@@ -253,23 +341,8 @@ float GlintsMapData::recursiveD(float s, float t, float stCullRadiusSq, float ro
     float pRight = pto + 0.5f;
     float qTop = qfrom + 0.5f;
     float qBottom = qto + 0.5f;
-    Vector2f p0q0(pLeft, qTop);
-    Vector2f p1q0(pRight, qTop);
-    Vector2f p0q1(pLeft, qBottom);
-    Vector2f p1q1(pRight, qBottom);
-    // first check if footprint center is inside region
-    float pc = pqc(0), qc = pqc(1);
-    bool pqcInside = (pLeft <= pc && pc <= pRight
-        && qTop <= qc && qc <= qBottom);
-    // reject region if all 4 centers are outside of culling radius from center
-    // and center is outside region
-    if (!pqcInside
-        && (dpq2dxy*(p0q0 - pqc)).squaredNorm() >= xyCullRadiusSq
-        && (dpq2dxy*(p1q0 - pqc)).squaredNorm() >= xyCullRadiusSq
-        && (dpq2dxy*(p0q1 - pqc)).squaredNorm() >= xyCullRadiusSq
-        && (dpq2dxy*(p1q1 - pqc)).squaredNorm() >= xyCullRadiusSq)
-    {
-        return 0.0f;
+    if (!footprintTextureAABBIntersect(pqc(0), pqc(1), xyCullRadius, dpq2dxy, pLeft, pRight, qTop, qBottom)) {
+        return 0.0;
     }
 
     // now check if this region's span of (s,t) values is within the roughness radius
@@ -278,23 +351,9 @@ float GlintsMapData::recursiveD(float s, float t, float stCullRadiusSq, float ro
     int treeX = pfrom / dim;
     int treeY = qfrom / dim;
     const STMinMax& stMinMax = treeLevel[treeY * treeDim + treeX];
-    Vector2f stTL(stMinMax.smin, stMinMax.tmin);
-    Vector2f stTR(stMinMax.smax, stMinMax.tmin);
-    Vector2f stBL(stMinMax.smin, stMinMax.tmax);
-    Vector2f stBR(stMinMax.smax, stMinMax.tmax);
-    // first check if (s,t) is within minmax region
-    bool stInside = (stMinMax.smin <= s && s <= stMinMax.smax
-        && stMinMax.tmin <= t && t <= stMinMax.tmax);
-    // reject region if all 4 centers are outside of cullring radius from center
-    // and center is outside region
-    Vector2f st(s, t);
-    if (!stInside
-        && (stTL - st).squaredNorm() >= stCullRadiusSq
-        && (stTR - st).squaredNorm() >= stCullRadiusSq
-        && (stBL - st).squaredNorm() >= stCullRadiusSq
-        && (stBR - st).squaredNorm() >= stCullRadiusSq)
-    {
-        return 0.0f;
+    if (!circleAABBIntersect(s, t, stCullRadius,
+                             stMinMax.smin, stMinMax.smax, stMinMax.tmin, stMinMax.tmax)) {
+        return 0.0;
     }
 
     float sum = 0.0f;
@@ -308,12 +367,12 @@ float GlintsMapData::recursiveD(float s, float t, float stCullRadiusSq, float ro
         Vector2f st_p0q1 = stAt(pfrom, qto);
         Vector2f st_p1q1 = stAt(pto, qto);
 
-        sum += triangleIntegralG(p0q0(0), p1q0(0), p0q0(1), p0q1(1),
+        sum += triangleIntegralG(pLeft, pRight, qTop, qBottom,
             st_p0q0, st_p1q0, st_p0q1,
             s, t, roughness, pqc, dpq2dxy);
 
         // lower triangle
-        sum += triangleIntegralG(p1q1(0), p0q1(0), p1q1(1), p1q0(1),
+        sum += triangleIntegralG(pRight, pLeft, qBottom, qTop,
             st_p1q1, st_p0q1, st_p1q0,
             s, t, roughness, pqc, dpq2dxy);
 
@@ -321,13 +380,13 @@ float GlintsMapData::recursiveD(float s, float t, float stCullRadiusSq, float ro
         // RECURSIVE CASE: call recursiveD on the four subregions
         int pmid = (pfrom + pto) / 2;
         int qmid = (qfrom + qto) / 2;
-        sum += recursiveD(s, t, stCullRadiusSq, roughness, pqc, dpq2dxy, xyCullRadiusSq,
+        sum += recursiveD(s, t, stCullRadius, roughness, pqc, dpq2dxy, xyCullRadius,
             pfrom, pmid, qfrom, qmid, level - 1);
-        sum += recursiveD(s, t, stCullRadiusSq, roughness, pqc, dpq2dxy, xyCullRadiusSq,
+        sum += recursiveD(s, t, stCullRadius, roughness, pqc, dpq2dxy, xyCullRadius,
             pmid, pto, qfrom, qmid, level - 1);
-        sum += recursiveD(s, t, stCullRadiusSq, roughness, pqc, dpq2dxy, xyCullRadiusSq,
+        sum += recursiveD(s, t, stCullRadius, roughness, pqc, dpq2dxy, xyCullRadius,
             pfrom, pmid, qmid, qto, level - 1);
-        sum += recursiveD(s, t, stCullRadiusSq, roughness, pqc, dpq2dxy, xyCullRadiusSq,
+        sum += recursiveD(s, t, stCullRadius, roughness, pqc, dpq2dxy, xyCullRadius,
             pmid, pto, qmid, qto, level - 1);
     }
     return sum;
