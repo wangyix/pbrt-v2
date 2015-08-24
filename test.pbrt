@@ -1,5 +1,5 @@
 Film "image"
-	"integer xresolution" [1280] "integer yresolution" [960] 
+	"integer xresolution" [1920] "integer yresolution" [1080] 
 LookAt 0.3 0.27 0.4  0 .12 0  0 1 0
 Camera "perspective" "float fov" [60]
 
@@ -7,13 +7,14 @@ Renderer "glints"
     "bool useApproxOnFirstBounce" "false"
     "bool disableDirectRenderer" "false"
     "bool disablePathRenderer" "false"
+    "integer subpixelsPerPixel" [16]
     #"integer maxdepth" 6
 
 #Renderer "sampler"
 #SurfaceIntegrator "path"
 
-Sampler "random"
-    "integer pixelsamples" [1] 
+Sampler "lowdiscrepancy"
+    "integer pixelsamples" [64] 
 
 
 WorldBegin
@@ -73,8 +74,8 @@ AttributeBegin
     Texture "nmap" "spectrum" "glintsnormalmap"
         "string filename" "textures/cuts.png"
         "string mapping" "uv"
-        "float uscale" 20
-        "float vscale" 20
+        "float uscale" 15
+        "float vscale" 15
     
     Material "glints"
         "texture normalmap" "nmap"
