@@ -433,12 +433,12 @@ float GlintsNormalMapDistribution::Pdf(const Vector &wo, const Vector &wi) const
 }
 
 void GlintsNormalMapDistribution::setPixelFootprintFromSample(float dx, float dy, float scale) const {
-    // scale footprint to pixel size
+    // scale footprint to subpixel size
     pixelFootprint.dudx = scale * sampleFootprint.dudx;
     pixelFootprint.dvdx = scale * sampleFootprint.dvdx;
     pixelFootprint.dudy = scale * sampleFootprint.dudy;
     pixelFootprint.dvdy = scale * sampleFootprint.dvdy;
-    // move center to pixel center
+    // move center to subpixel center (dx, dy should be in units of subpixels, not pixels)
     pixelFootprint.u = sampleFootprint.u + pixelFootprint.dudx * dx + pixelFootprint.dudy * dy;
     pixelFootprint.v = sampleFootprint.v + pixelFootprint.dvdx * dx + pixelFootprint.dvdy * dy;
     // modulo footprint center to put it in range [0,1]^2

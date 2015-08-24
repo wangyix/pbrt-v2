@@ -42,11 +42,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class GlintsPathIntegrator : public SurfaceIntegrator {
 public:
-    GlintsPathIntegrator(int md, int xResolution, int yResolution, int pixelSamples,
-        bool useApproxFirstBounce)
-    : filmXResolution(xResolution), filmYResolution(yResolution),
-    footprintScale(sqrtf(pixelSamples)),
-    useApproxOnFirstBounce(useApproxFirstBounce) {
+    GlintsPathIntegrator(int subpixelsPerDim, int md,
+        int xResolution, int yResolution, int pixelSamples, bool useApproxFirstBounce)
+            : filmXResolution(xResolution),
+            filmYResolution(yResolution),
+            nSubpixelsPerDim(subpixelsPerDim),
+            footprintScale(sqrtf(pixelSamples) / subpixelsPerDim),
+            useApproxOnFirstBounce(useApproxFirstBounce) {
         maxDepth = md;
     }
     Spectrum Li(const Scene *scene, const Renderer *renderer,
@@ -62,13 +64,18 @@ private:
     BSDFSampleOffsets pathSampleOffsets[SAMPLE_DEPTH];
 
     const int filmXResolution, filmYResolution;
+    const int nSubpixelsPerDim;
+    // footprintScale is sqrt(pixelSamples) / subpixelsPerDim.  The sqrt(pixelSamples) is to
+    // undo the raydifferential scaling that GlintsPassRendererTask::Run() does, giving us a
+    // pixel-sized footprint.  The subpixelsPerDim is to scale the pixel-sized footprint
+    // to a subpixel-sized footprint.
     const float footprintScale;
 
     const bool useApproxOnFirstBounce;
 };
 
 
-GlintsPathIntegrator *CreateGlintsPathSurfaceIntegrator(const ParamSet &params,
-    Film* film, Sampler* sampler);
+GlintsPathIntegrator *CreateGlintsPathSurfaceIntegrator(int subpixelsPerDim,
+    const ParamSet &params, Film* film, Sampler* sampler);
 
 #endif // PBRT_INTEGRATORS_GLINTSPATH_H

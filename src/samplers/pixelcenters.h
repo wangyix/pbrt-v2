@@ -12,7 +12,7 @@
 class PixelCentersSampler : public Sampler {
 public:
     PixelCentersSampler(int xstart, int xend, int ystart,
-        int yend, int ns, float sopen, float sclose);
+        int yend, int subpixelsPerDim, float sopen, float sclose);
     ~PixelCentersSampler() {
         FreeAligned(imageSamples);
     }
@@ -22,13 +22,13 @@ public:
     Sampler *GetSubSampler(int num, int count);
 private:
     // PixelCentersSampler Private Data
-    int xPos, yPos, nSamples, nSamplesSqrt;
+    int xPos, yPos, nSubpixelsPerDim, nSamples;
     float *imageSamples, *lensSamples, *timeSamples;
     int samplePos;
 };
 
 
-PixelCentersSampler *CreatePixelCentersSampler(int ns, const Film *film,
+PixelCentersSampler *CreatePixelCentersSampler(int subpixelsPerDim, const Film *film,
     const Camera *camera);
 
 #endif // PBRT_SAMPLERS_PIXELCENTERS_H

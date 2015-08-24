@@ -15,10 +15,17 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
     
     disableDirectRenderer = rendererParams.FindOneBool("disableDirectRenderer", false);
     disablePathRenderer = rendererParams.FindOneBool("disablePathRenderer", false);
+    int subpixelsPerPixel = rendererParams.FindOneInt("subpixelsPerPixel", 1);
+
+    // make sure subpixels per pixel is a square number
+    int subpixelsPerDim = Round2Int(sqrtf(subpixelsPerPixel));
+    if (subpixelsPerDim * subpixelsPerDim != subpixelsPerPixel) {
+        printf("Number of glint subpixels per pixel needs to be a square number!\n");
+        exit(1);
+    }
 
     // direct lighting renderer will splat its samples.
-    int directSamplesPerPixel = rendererParams.FindOneInt("directSamplesPerPixel", 1);
-    directSampler = CreatePixelCentersSampler(directSamplesPerPixel, camera->film, camera);
+    directSampler = CreatePixelCentersSampler(subpixelsPerDim, camera->film, camera);
     if (!directSampler) Severe("Unable to create pixel centers sampler.");
 
     directSurfIntegrator = CreateGlintsDirectLightingIntegrator(rendererParams);
@@ -32,7 +39,8 @@ GlintsRenderer::GlintsRenderer(Sampler* pathS, Camera* c,
 
     pathSampler = pathS;
 
-    pathSurfIntegrator = CreateGlintsPathSurfaceIntegrator(rendererParams, camera->film, pathSampler);
+    pathSurfIntegrator = CreateGlintsPathSurfaceIntegrator(subpixelsPerDim, rendererParams,
+                                                           camera->film, pathSampler);
     if (!pathSurfIntegrator) Severe("Unable to create glints path integrator.");
 
     pathVolIntegrator = pathVi;

@@ -26,12 +26,18 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
     // E S* G Lp, where E=eye, S=specular, G=glints, Lp=pointlight.
     bool nonSpecularBounceOccurred = false;
 
-    // calculate offset of the pixel center from the sample
-    float pixelLeft = min(Floor2Int(sample->imageX), filmXResolution - 1);
-    float pixelTop = min(Floor2Int(sample->imageY), filmYResolution - 1);
-    float dxToPixelCenter = pixelLeft + 0.5f - sample->imageX;
-    float dyToPixelCenter = pixelTop + 0.5f - sample->imageY;
-
+    // Calculate offset from the sample to the center of the subpixel containing the sample.
+    // NOTE: we do not divide dxToSubpixelCenter, dyToSubpixelCenter by nSubpixelsPerDim because
+    // dx,dy refer to distance in subpixels, not pixels.  That means dx,dy to subpixel center
+    // will always be in [-0.5, 0.5], regardless of subpixels per dim.
+    float subpixelCol = min(Floor2Int(sample->imageX * nSubpixelsPerDim),
+                            filmXResolution * nSubpixelsPerDim - 1);
+    float subpixelRow = min(Floor2Int(sample->imageY * nSubpixelsPerDim),
+                            filmYResolution * nSubpixelsPerDim - 1);
+    float dxToSubpixelCenter = (subpixelCol + 0.5f) - sample->imageX * nSubpixelsPerDim;
+    float dyToSubpixelCenter = (subpixelRow + 0.5f) - sample->imageY * nSubpixelsPerDim;
+    assert(abs(dxToSubpixelCenter) <= 0.500001f);
+    assert(abs(dyToSubpixelCenter) <= 0.500001f);
 
     // Declare common path integration variables
     Spectrum pathThroughput = 1., L = 0.;
@@ -55,7 +61,7 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         // If yes, do not use approximation.
         BSDF::SetGlintsMicrofacetBxDFsUseApprox(bsdf,
             useApproxOnFirstBounce || nonSpecularBounceOccurred,
-            dxToPixelCenter, dyToPixelCenter, footprintScale);
+            dxToSubpixelCenter, dyToSubpixelCenter, footprintScale);
 
         const LightSampleOffsets* lightSampleOffset = NULL;
         const BSDFSampleOffsets* bsdfSampleOffset = NULL;
@@ -151,10 +157,10 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
 }
 
 
-GlintsPathIntegrator *CreateGlintsPathSurfaceIntegrator(const ParamSet &params,
-    Film* film, Sampler* sampler) {
+GlintsPathIntegrator *CreateGlintsPathSurfaceIntegrator(int subpixelsPerDim,
+        const ParamSet &params, Film* film, Sampler* sampler) {
     int maxDepth = params.FindOneInt("maxdepth", 5);
     bool useApproxOnFirstBounce = params.FindOneBool("useApproxOnFirstBounce", false);
-    return new GlintsPathIntegrator(maxDepth, film->xResolution, film->yResolution,
+    return new GlintsPathIntegrator(subpixelsPerDim, maxDepth,film->xResolution, film->yResolution,
         sampler->samplesPerPixel, useApproxOnFirstBounce);
 }
