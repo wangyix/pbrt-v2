@@ -73,27 +73,23 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
         if (nonSpecularBounceOccurred) {
             // approximation will be used for the glints bxdfs
             L += pathThroughput *
-                UniformSampleOneLightGlints(scene, renderer, arena, p, n, wo,
-                isectp->rayEpsilon, ray.time, bsdf, sample, rng,
-                lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
+                UniformSampleOneLightIncludeGlintsMaterial(scene, renderer, arena, p, n, wo,
+                    isectp->rayEpsilon, ray.time, bsdf, sample, rng,
+                    lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
         } else {
             // get E S* G Lnp paths, where Lnp = non-pointlight
             // approximation will NOT be used for the glints bxdfs
             L += pathThroughput *
-                UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
-                true, true,
-                //dxToPixelCenter, dyToPixelCenter, footprintScale,
-                scene, renderer, arena, p, n, wo,
-                isectp->rayEpsilon, ray.time, bsdf, sample, rng,
-                lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
+                UniformSampleOneNonPointLightFromGlintsMaterial(
+                    scene, renderer, arena, p, n, wo,
+                    isectp->rayEpsilon, ray.time, bsdf, sample, rng,
+                    lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
             // get E S* D L paths, where D = non-glint,(non-specular)
             L += pathThroughput *
-                UniformSampleOneNonPointLightFromGlintsOrOneLightFromNonGlintsMaterial(
-                false, false,
-                //dxToPixelCenter, dyToPixelCenter, footprintScale,
-                scene, renderer, arena, p, n, wo,
-                isectp->rayEpsilon, ray.time, bsdf, sample, rng,
-                lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
+                UniformSampleOneLightFromNonGlintsMaterial(
+                    scene, renderer, arena, p, n, wo,
+                    isectp->rayEpsilon, ray.time, bsdf, sample, rng,
+                    lightNumOffset[bounces], lightSampleOffset, bsdfSampleOffset);
         }
 
         // Sample BSDF to get new path direction

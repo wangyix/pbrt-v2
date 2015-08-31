@@ -121,12 +121,7 @@ enum BxDFType {
     BSDF_ALL_TRANSMISSION = BSDF_TRANSMISSION |
                             BSDF_ALL_TYPES,
     BSDF_ALL              = BSDF_ALL_REFLECTION |
-                            BSDF_ALL_TRANSMISSION,
-
-    BSDF_GLINTS_OR_SPECULAR = BSDF_GLINTS |
-                              BSDF_SPECULAR |
-                              BSDF_REFLECTION |
-                              BSDF_TRANSMISSION
+                            BSDF_ALL_TRANSMISSION
 };
 
 

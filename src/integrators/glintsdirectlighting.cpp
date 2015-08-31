@@ -33,7 +33,8 @@ Spectrum GlintsDirectLightingIntegrator::Li(const Scene *scene,
     const Normal &n = bsdf->dgShading.nn;
     
     // if the intersection is not a glinting material nor specular, bail
-    if (bsdf->NumComponents(BSDF_GLINTS_OR_SPECULAR) == 0) {
+    if (bsdf->NumComponents(BxDFType(BSDF_GLINTS | BSDF_SPECULAR 
+                            | BSDF_REFLECTION | BSDF_TRANSMISSION)) == 0) {
         return Spectrum(0.f);
     }
 
