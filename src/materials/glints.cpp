@@ -7,29 +7,29 @@
 #include "texture.h"
 
 // GlintsMaterial Method Definitions
-GlintsMaterial::GlintsMaterial(Reference<Texture<Spectrum> > et,
+GlintsMaterial::GlintsMaterial(Reference<GlintsNormalTexture> normal,
+    Reference<Texture<Spectrum> > et,
     Reference<Texture<Spectrum> > kk,
     Reference<Texture<float> > rough,
     Reference<Texture<float> > approxRough,
-    Reference<GlintsNormalTexture> normal,
-    Reference<Texture<float> > bump) {
+    Reference<Texture<Spectrum> > kd,
+    Reference<Texture<Spectrum> > kr,
+    Reference<Texture<float> > kr_eta) {
+    normalMap = normal;
     eta = et;
     k = kk;
     roughness = rough;
     approxRoughness = approxRough;
-    normalMap = normal;
-    bumpMap = bump;
+    Kd = kd;
+    Kr = kr;
+    Kr_eta = kr_eta;
 }
 
 
 BSDF *GlintsMaterial::GetBSDF(const DifferentialGeometry &dgGeom,
     const DifferentialGeometry &dgShading, MemoryArena &arena) const {
     // Allocate _BSDF_, possibly doing bump mapping with _bumpMap_
-    DifferentialGeometry dgs;
-    if (bumpMap)
-        Bump(bumpMap, dgGeom, dgShading, &dgs);
-    else
-        dgs = dgShading;
+    DifferentialGeometry dgs = dgShading;
     BSDF *bsdf = BSDF_ALLOC(arena, BSDF)(dgs, dgGeom.nn);
 
     // find pixel footprint in texture
@@ -50,20 +50,22 @@ BSDF *GlintsMaterial::GetBSDF(const DifferentialGeometry &dgGeom,
         k->Evaluate(dgs));
 
     bsdf->Add(BSDF_ALLOC(arena, GlintsMicrofacet)(1., frMf, md, mdApprox));
+
+    // Add diffuse and specular BxDFs
+    Spectrum kd = Kd->Evaluate(dgs);
+    if (!kd.IsBlack()) {
+        BxDF *diff = BSDF_ALLOC(arena, Lambertian)(kd);
+        bsdf->Add(diff);
+    }
+    Spectrum kr = Kr->Evaluate(dgs);
+    if (!kr.IsBlack()) {
+        float kr_eta = Kr_eta->Evaluate(dgs);
+        Fresnel *fresnel = BSDF_ALLOC(arena, FresnelDielectric)(kr_eta, 1.f);
+        bsdf->Add(BSDF_ALLOC(arena, SpecularReflection)(kr, fresnel));
+    }
+
     return bsdf;
-    
-    
-    /*BSDF *bsdf = BSDF_ALLOC(arena, BSDF)(dgShading, dgGeom.nn);
 
-    float rough = roughness->Evaluate(dgShading);
-    MicrofacetDistribution *md = BSDF_ALLOC(arena, GlintsNormalMapDistribution)
-        (dgShading, rough, normalMap->getMapData());
-
-    Fresnel *frMf = BSDF_ALLOC(arena, FresnelConductor)(eta->Evaluate(dgShading),
-        k->Evaluate(dgShading));
-
-    bsdf->Add(BSDF_ALLOC(arena, Microfacet)(1., frMf, md));
-    */
 }
 
 
@@ -94,21 +96,9 @@ const float CopperK[CopperSamples] = {
     3.863125, 4.05, 4.239563, 4.43, 4.619563, 4.817, 5.034125, 5.26, 5.485625, 5.717 };
 
 GlintsMaterial *CreateGlintsMaterial(const Transform &xform, const TextureParams &mp) {
-    static Spectrum copperN = Spectrum::FromSampled(CopperWavelengths, CopperN, CopperSamples);
-    Reference<Texture<Spectrum> > eta = mp.GetSpectrumTexture("eta", copperN);
-
-    static Spectrum copperK = Spectrum::FromSampled(CopperWavelengths, CopperK, CopperSamples);
-    Reference<Texture<Spectrum> > k = mp.GetSpectrumTexture("k", copperK);
-
-    Reference<Texture<float> > roughness = mp.GetFloatTexture("roughness", .01f);
-
-    Reference<Texture<float> > approxRoughness = mp.GetFloatTexture("approxRoughness", .01f);
-
-    Reference<Texture<float> > bumpMap = mp.GetFloatTextureOrNull("bumpmap");
-
     // default normalMap is the constant (0,0,1);
     Reference<Texture<Spectrum> > normalMap = mp.GetSpectrumTexture("normalmap", Spectrum());
-    
+
     // change normalMap reference from type Texture<Spectrum> to GlintsNormalTexture using casts
     const Texture<Spectrum>* normalMapPtrConst = normalMap.GetPtr();
     Texture<Spectrum>* normalMapPtr = const_cast<Texture<Spectrum>*>(normalMapPtrConst);
@@ -120,7 +110,23 @@ GlintsMaterial *CreateGlintsMaterial(const Transform &xform, const TextureParams
     }
     Reference<GlintsNormalTexture> normalMapCasted(p);
 
-    return new GlintsMaterial(eta, k, roughness, approxRoughness, normalMapCasted, bumpMap);
+    static Spectrum copperN = Spectrum::FromSampled(CopperWavelengths, CopperN, CopperSamples);
+    Reference<Texture<Spectrum> > eta = mp.GetSpectrumTexture("eta", copperN);
+
+    static Spectrum copperK = Spectrum::FromSampled(CopperWavelengths, CopperK, CopperSamples);
+    Reference<Texture<Spectrum> > k = mp.GetSpectrumTexture("k", copperK);
+
+    Reference<Texture<float> > roughness = mp.GetFloatTexture("roughness", .01f);
+
+    Reference<Texture<float> > approxRoughness = mp.GetFloatTexture("approxRoughness", .01f);
+
+    // get coefficients of diffuse and specular reflection
+    Reference<Texture<Spectrum> > Kd = mp.GetSpectrumTexture("Kd", Spectrum(0.f));
+    Reference<Texture<Spectrum> > Kr = mp.GetSpectrumTexture("Kr", Spectrum(0.f));
+    Reference<Texture<float> > Kr_eta = mp.GetFloatTexture("Kr_eta", 1.5f);
+
+    return new GlintsMaterial(normalMapCasted, eta, k, roughness, approxRoughness,
+                              Kd, Kr, Kr_eta);
 }
 
 

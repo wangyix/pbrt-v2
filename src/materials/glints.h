@@ -13,25 +13,26 @@
 
 class GlintsMaterial : public Material {
 public:
-    
-    GlintsMaterial(Reference<Texture<Spectrum> > eta,
+    GlintsMaterial(Reference<GlintsNormalTexture> normal,
+        Reference<Texture<Spectrum> > eta,
         Reference<Texture<Spectrum> > k,
         Reference<Texture<float> > rough,
         Reference<Texture<float> > approxRough,
-        Reference<GlintsNormalTexture> normal,
-        Reference<Texture<float> > bump);
+        Reference<Texture<Spectrum> > kd,
+        Reference<Texture<Spectrum> > kr,
+        Reference<Texture<float> > kr_eta);
 
     BSDF *GetBSDF(const DifferentialGeometry &dgGeom,
         const DifferentialGeometry &dgShading, MemoryArena &arena) const;
+
 private:
-    
+    Reference<GlintsNormalTexture> normalMap;
     Reference<Texture<Spectrum> > eta, k;
     Reference<Texture<float> > roughness;
     Reference<Texture<float> > approxRoughness;
 
-    Reference<GlintsNormalTexture> normalMap;
-
-    Reference<Texture<float> > bumpMap;
+    Reference<Texture<Spectrum> > Kd, Kr;
+    Reference<Texture<float> > Kr_eta;
 };
 
 
