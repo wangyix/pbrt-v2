@@ -30,10 +30,8 @@ Spectrum GlintsPathIntegrator::Li(const Scene *scene, const Renderer *renderer,
     // NOTE: we do not divide dxToSubpixelCenter, dyToSubpixelCenter by nSubpixelsPerDim because
     // dx,dy refer to distance in subpixels, not pixels.  That means dx,dy to subpixel center
     // will always be in [-0.5, 0.5], regardless of subpixels per dim.
-    float subpixelCol = min(Floor2Int(sample->imageX * nSubpixelsPerDim),
-                            filmXResolution * nSubpixelsPerDim - 1);
-    float subpixelRow = min(Floor2Int(sample->imageY * nSubpixelsPerDim),
-                            filmYResolution * nSubpixelsPerDim - 1);
+    float subpixelCol = Floor2Int(sample->imageX * nSubpixelsPerDim);
+    float subpixelRow = Floor2Int(sample->imageY * nSubpixelsPerDim);
     float dxToSubpixelCenter = (subpixelCol + 0.5f) - sample->imageX * nSubpixelsPerDim;
     float dyToSubpixelCenter = (subpixelRow + 0.5f) - sample->imageY * nSubpixelsPerDim;
     assert(abs(dxToSubpixelCenter) <= 0.500001f);
