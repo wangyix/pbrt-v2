@@ -313,11 +313,8 @@ inline bool Quadratic(float A, float B, float C, float *t0, float *t1) {
     float rootDiscrim = sqrtf(discrim);
 
     // Compute quadratic _t_ values
-    float q;
-    if (B < 0) q = -.5f * (B - rootDiscrim);
-    else       q = -.5f * (B + rootDiscrim);
-    *t0 = q / A;
-    *t1 = C / q;
+    *t0 = -0.5f * (B + rootDiscrim) / A;
+    *t1 = -B / A - *t0;
     if (*t0 > *t1) swap(*t0, *t1);
     return true;
 }
